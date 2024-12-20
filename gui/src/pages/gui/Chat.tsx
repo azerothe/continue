@@ -37,7 +37,6 @@ import PageHeader from "../../components/PageHeader";
 import StepContainer from "../../components/StepContainer";
 import AcceptRejectAllButtons from "../../components/StepContainer/AcceptRejectAllButtons";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
-import useHistory from "../../hooks/useHistory";
 import { useTutorialCard } from "../../hooks/useTutorialCard";
 import { useWebviewListener } from "../../hooks/useWebviewListener";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
@@ -57,6 +56,7 @@ import {
   setShowDialog,
 } from "../../redux/slices/uiSlice";
 import { RootState } from "../../redux/store";
+import { cancelStream } from "../../redux/thunks/cancelStream";
 import { exitEditMode } from "../../redux/thunks/exitEditMode";
 import { streamResponseThunk } from "../../redux/thunks/streamResponse";
 import {
@@ -71,6 +71,10 @@ import ConfigErrorIndicator from "./ConfigError";
 import { ToolCallDiv } from "./ToolCallDiv";
 import { ToolCallButtons } from "./ToolCallDiv/ToolCallButtonsDiv";
 import ToolOutput from "./ToolCallDiv/ToolOutput";
+import {
+  loadLastSession,
+  saveCurrentSession,
+} from "../../redux/thunks/session";
 
 const StopButton = styled.div`
   background-color: ${vscBackground};
@@ -148,8 +152,6 @@ export function Chat() {
   const showChatScrollbar = useAppSelector(
     (state) => state.config.config.ui?.showChatScrollbar,
   );
-  const { saveSession, getLastSessionId, loadLastSession } =
-    useHistory(dispatch);
   const codeToEdit = useAppSelector((state) => state.session.codeToEdit);
   const toolCallState = useSelector<RootState, ToolCallState | undefined>(
     selectCurrentToolCall,
@@ -165,7 +167,7 @@ export function Chat() {
   const isSingleRangeEditOrInsertion = useAppSelector(
     selectIsSingleRangeEditOrInsertion,
   );
-
+  const lastSessionId = useAppSelector((state) => state.session.lastSessionId);
   const snapToBottom = useCallback(() => {
     if (!stepsDivRef.current) return;
     const elem = stepsDivRef.current;
@@ -203,7 +205,7 @@ export function Chat() {
         isMetaEquivalentKeyPressed(e) &&
         !e.shiftKey
       ) {
-        // dispatch(cancelGeneration()); TODO!!!
+        dispatch(cancelStream());
       }
     };
     window.addEventListener("keydown", listener);
@@ -258,8 +260,6 @@ export function Chat() {
         return;
       }
 
-      editor.commands.clearContent(true);
-
       const promptPreamble = isInEditMode
         ? getMultifileEditPrompt(codeToEdit)
         : undefined;
@@ -267,6 +267,8 @@ export function Chat() {
       dispatch(
         streamResponseThunk({ editorState, modifiers, promptPreamble, index }),
       );
+
+      editor.commands.clearContent(true);
 
       // Increment localstorage counter for popup
       const currentCount = getLocalStorage("mainTextEntryCounter");
@@ -319,11 +321,16 @@ export function Chat() {
   useWebviewListener(
     "newSession",
     async () => {
-      saveSession();
+      await dispatch(
+        saveCurrentSession({
+          openNewSession: true,
+        }),
+      );
+      // unwrapResult(response) // errors if session creation failed
       mainTextInputRef.current?.focus?.();
       dispatch(exitEditMode());
     },
-    [saveSession],
+    [mainTextInputRef],
   );
 
   const isLastUserInput = useCallback(
@@ -341,15 +348,10 @@ export function Chat() {
     <>
       {isInEditMode && (
         <PageHeader
-          title="Chat"
-          onClick={() => {
-            loadLastSession().catch((e) =>
-              console.error(`Failed to load last session: ${e}`),
-            );
-
-            if (isInEditMode) {
-              dispatch(exitEditMode());
-            }
+          title="Back to Chat"
+          onClick={async () => {
+            await dispatch(loadLastSession({ saveCurrentSession: false }));
+            dispatch(exitEditMode());
           }}
         />
       )}
@@ -451,7 +453,6 @@ export function Chat() {
           trackVisibility={isStreaming}
         />
       </StepsDiv>
-
       <div className={`relative`}>
         <div className="absolute -top-8 right-2 z-30">
           {ttsActive && (
@@ -496,14 +497,16 @@ export function Chat() {
         >
           <div className="flex flex-row items-center justify-between pb-1 pl-0.5 pr-2">
             <div className="xs:inline hidden">
-              {history.length === 0 && getLastSessionId() && !isInEditMode && (
+              {history.length === 0 && lastSessionId && !isInEditMode && (
                 <div className="xs:inline hidden">
                   <NewSessionButton
-                    onClick={() =>
-                      loadLastSession().catch((e) =>
-                        console.error(`Failed to load last session: ${e}`),
-                      )
-                    }
+                    onClick={async () => {
+                      await dispatch(
+                        loadLastSession({
+                          saveCurrentSession: true,
+                        }),
+                      );
+                    }}
                     className="flex items-center gap-2"
                   >
                     <ArrowLeftIcon className="h-3 w-3" />
@@ -518,17 +521,19 @@ export function Chat() {
           {hasPendingApplies && isSingleRangeEditOrInsertion && (
             <AcceptRejectAllButtons
               pendingApplyStates={pendingApplyStates}
-              onAcceptOrReject={(outcome) => {
+              onAcceptOrReject={async (outcome) => {
                 if (outcome === "acceptDiff") {
-                  loadLastSession().catch((e) =>
-                    console.error(`Failed to load last session: ${e}`),
+                  await dispatch(
+                    loadLastSession({
+                      saveCurrentSession: false,
+                    }),
                   );
-
                   dispatch(exitEditMode());
                 }
               }}
             />
           )}
+
           {history.length === 0 && (
             <>
               {onboardingCard.show && (
@@ -546,6 +551,7 @@ export function Chat() {
           )}
         </div>
       </div>
+
       <div
         className={`${history.length === 0 ? "h-full" : ""} flex flex-col justify-end`}
       >

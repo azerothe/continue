@@ -7,9 +7,7 @@ import { useContext, useEffect, useState } from "react";
 import { IdeMessengerContext } from "../context/IdeMessenger";
 import { Button, SecondaryButton } from "../components";
 import { ArrowPathIcon, FlagIcon } from "@heroicons/react/24/outline";
-
-const GITHUB_LINK = "https://github.com/continuedev/continue/issues/new/choose";
-const DISCORD_LINK = "https://discord.com/invite/EfJEfdFnDQ";
+import { DISCORD_LINK, GITHUB_LINK } from "core/util/constants";
 
 const ErrorPage: React.FC = () => {
   const error: any = useRouteError();
@@ -48,7 +46,6 @@ const ErrorPage: React.FC = () => {
           localStorage.removeItem("inputHistory_chat");
           // localStorage.removeItem("showTutorialCard");
           // localStorage.removeItem("onboardingStatus");
-          // localStorage.removeItem("lastSessionId");
           navigate("/");
         }}
       >

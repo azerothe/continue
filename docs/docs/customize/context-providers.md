@@ -444,7 +444,7 @@ Available connection types:
 
 ### `@Debugger`
 
-Reference the contents of the local variables in the debugger.
+Reference the contents of the local variables in the debugger. Currently only available in VS Code.
 
 ```json title="config.json"
 {
@@ -502,13 +502,15 @@ The [Model Context Protocol](https://modelcontextprotocol.io/introduction) is a 
 ```json
 {
   "experimental": {
-    "modelContextProtocolServer": {
-      "transport": {
-        "type": "stdio",
-        "command": "uvx",
-        "args": ["mcp-server-sqlite", "--db-path", "/Users/NAME/test.db"]
+    "modelContextProtocolServers": [
+      {
+        "transport": {
+          "type": "stdio",
+          "command": "uvx",
+          "args": ["mcp-server-sqlite", "--db-path", "/Users/NAME/test.db"]
+        }
       }
-    }
+    ]
   }
 }
 ```

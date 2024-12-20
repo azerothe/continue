@@ -1,8 +1,8 @@
 import { ChatMessage, IDE, LLMFullCompletionOptions, PromptLog } from "core";
 import type { FromWebviewProtocol, ToWebviewProtocol } from "core/protocol";
 import { WebviewMessengerResult } from "core/protocol/util";
-import { MessageIde } from "core/util/messageIde";
-import { Message } from "core/util/messenger";
+import { MessageIde } from "core/protocol/messenger/messageIde";
+import { Message } from "core/protocol/messenger";
 import { createContext } from "react";
 import { v4 as uuidv4 } from "uuid";
 import "vscode-webview";
@@ -76,8 +76,7 @@ export class IdeMessenger implements IIdeMessenger {
           );
           throw new Error("postIntellijMessage is undefined");
         }
-        messageId = messageId ?? uuidv4();
-        window.postIntellijMessage?.(messageType, data, messageId);
+        window.postIntellijMessage?.(messageType, data, messageId ?? uuidv4());
         return;
       } else {
         console.log(
@@ -184,25 +183,32 @@ export class IdeMessenger implements IIdeMessenger {
     };
     window.addEventListener("message", handler);
 
-    cancelToken?.addEventListener("abort", () => {
+    const handleAbort = () => {
       this.post("abort", undefined, messageId);
-    });
+    };
+    cancelToken?.addEventListener("abort", handleAbort);
 
-    while (!done) {
+    try {
+      while (!done) {
+        if (buffer.length > index) {
+          const chunks = buffer.slice(index);
+          index = buffer.length;
+          yield chunks;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
       if (buffer.length > index) {
         const chunks = buffer.slice(index);
-        index = buffer.length;
         yield chunks;
       }
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
 
-    if (buffer.length > index) {
-      const chunks = buffer.slice(index);
-      yield chunks;
+      return returnVal;
+    } catch (e) {
+      throw e;
+    } finally {
+      cancelToken?.removeEventListener("abort", handleAbort);
     }
-
-    return returnVal;
   }
 
   async *llmStreamChat(

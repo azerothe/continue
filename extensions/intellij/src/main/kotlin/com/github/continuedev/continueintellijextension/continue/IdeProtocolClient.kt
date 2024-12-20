@@ -111,6 +111,8 @@ class AsyncFileSaveListener(private val ideProtocolClient: IdeProtocolClient) : 
                     ".continue\\config.json"
                 ) || event.path.endsWith(".continue\\config.ts") || event.path.endsWith(".continuerc.json") || event.path.endsWith(
                     ".continuerc.json"
+                ) || event.path.endsWith(".continue/config.yaml") || event.path.endsWith(
+                    ".continue\\config.yaml"
                 )
             ) {
                 return object : AsyncFileListener.ChangeApplier {

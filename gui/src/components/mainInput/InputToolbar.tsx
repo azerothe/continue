@@ -9,7 +9,15 @@ import {
   vscForeground,
   vscInputBackground,
 } from "..";
+import { useAppDispatch, useAppSelector } from "../../redux/hooks";
 import { selectUseActiveFile } from "../../redux/selectors";
+import { selectDefaultModel } from "../../redux/slices/configSlice";
+import {
+  selectHasCodeToEdit,
+  selectIsInEditMode,
+} from "../../redux/slices/sessionSlice";
+import { exitEditMode } from "../../redux/thunks";
+import { loadLastSession } from "../../redux/thunks/session";
 import {
   getAltKeyLabel,
   getFontSize,
@@ -20,14 +28,6 @@ import { ToolTip } from "../gui/Tooltip";
 import ModelSelect from "../modelSelection/ModelSelect";
 import HoverItem from "./InputToolbar/HoverItem";
 import ToggleToolsButton from "./InputToolbar/ToggleToolsButton";
-import { useAppDispatch, useAppSelector } from "../../redux/hooks";
-import { selectDefaultModel } from "../../redux/slices/configSlice";
-import {
-  selectHasCodeToEdit,
-  selectIsInEditMode,
-} from "../../redux/slices/sessionSlice";
-import { exitEditMode } from "../../redux/thunks";
-import useHistory from "../../hooks/useHistory";
 
 const StyledDiv = styled.div<{ isHidden?: boolean }>`
   padding-top: 4px;
@@ -89,12 +89,11 @@ function InputToolbar(props: InputToolbarProps) {
   const useActiveFile = useAppSelector(selectUseActiveFile);
   const isInEditMode = useAppSelector(selectIsInEditMode);
   const hasCodeToEdit = useAppSelector(selectHasCodeToEdit);
-  const { loadLastSession } = useHistory(dispatch);
   const isEditModeAndNoCodeToEdit = isInEditMode && !hasCodeToEdit;
   const isEnterDisabled = props.disabled || isEditModeAndNoCodeToEdit;
   const shouldRenderToolsButton =
     defaultModel &&
-    modelSupportsTools(defaultModel.model) &&
+    modelSupportsTools(defaultModel.model, defaultModel.provider) &&
     !props.toolbarOptions?.hideTools;
 
   const supportsImages =
@@ -193,11 +192,12 @@ function InputToolbar(props: InputToolbarProps) {
           {isInEditMode && (
             <HoverItem
               className="hidden hover:underline sm:flex"
-              onClick={(e) => {
-                loadLastSession().catch((e) =>
-                  console.error(`Failed to load last session: ${e}`),
+              onClick={async (e) => {
+                await dispatch(
+                  loadLastSession({
+                    saveCurrentSession: false,
+                  }),
                 );
-
                 dispatch(exitEditMode());
               }}
             >
@@ -208,6 +208,7 @@ function InputToolbar(props: InputToolbarProps) {
           )}
 
           <EnterButton
+            data-testid="submit-input-button"
             onClick={async (e) => {
               if (props.onEnter) {
                 props.onEnter({

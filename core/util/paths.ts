@@ -1,9 +1,9 @@
-import * as fs from "fs";
-import * as os from "os";
-import { pathToFileURL } from "url";
-import * as path from "path";
 import * as JSONC from "comment-json";
 import dotenv from "dotenv";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+import { pathToFileURL } from "url";
 
 import { IdeType, SerializedContinueConfig } from "../";
 import { defaultConfig, defaultConfigJetBrains } from "../config/default";
@@ -13,6 +13,10 @@ dotenv.config();
 
 const CONTINUE_GLOBAL_DIR =
   process.env.CONTINUE_GLOBAL_DIR ?? path.join(os.homedir(), ".continue");
+
+// export const DEFAULT_CONFIG_TS_CONTENTS = `import { Config } from "./types"\n\nexport function modifyConfig(config: Config): Config {
+//   return config;
+// }`;
 
 export const DEFAULT_CONFIG_TS_CONTENTS = `export function modifyConfig(config: Config): Config {
   return config;
@@ -101,8 +105,16 @@ export function getConfigJsonPath(ideType: IdeType = "vscode"): string {
   return p;
 }
 
-export function getConfigJsonUri(): string {
-  return getContinueGlobalUri() + "/config.json";
+export function getConfigYamlPath(ideType: IdeType): string {
+  const p = path.join(getContinueGlobalPath(), "config.yaml");
+  // if (!fs.existsSync(p)) {
+  //   if (ideType === "jetbrains") {
+  //     fs.writeFileSync(p, YAML.stringify(defaultConfigYamlJetBrains));
+  //   } else {
+  //     fs.writeFileSync(p, YAML.stringify(defaultConfigYaml));
+  //   }
+  // }
+  return p;
 }
 
 export function getConfigTsPath(): string {

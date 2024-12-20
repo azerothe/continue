@@ -77,7 +77,7 @@ export const supportedLanguages: { [key: string]: LanguageName } = {
   mjs: LanguageName.JAVASCRIPT,
   cjs: LanguageName.JAVASCRIPT,
   py: LanguageName.PYTHON,
-  ipynb: LanguageName.PYTHON,
+  // ipynb: LanguageName.PYTHON, // It contains Python, but the file format is a ton of JSON.
   pyw: LanguageName.PYTHON,
   pyi: LanguageName.PYTHON,
   el: LanguageName.ELISP,
@@ -231,7 +231,13 @@ export async function getSymbolsForFile(
     return;
   }
 
-  const tree = parser.parse(contents);
+  let tree: Parser.Tree;
+  try {
+    tree = parser.parse(contents);
+  } catch (e) {
+    console.log(`Error parsing file: ${filepath}`);
+    return;
+  }
   // console.log(`file: ${filepath}`);
 
   // Function to recursively find all named nodes (classes and functions)
@@ -273,6 +279,7 @@ export async function getSymbolsForFile(
               line: node.endPosition.row + 1,
             },
           },
+          content: node.text,
         });
       }
     }

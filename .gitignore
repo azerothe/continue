@@ -152,7 +152,6 @@ Icon
 Icon?
 
 .continuerc.json
-.prompts/
 .aider*
 
 notes.md
@@ -169,4 +168,4 @@ extensions/.continue-debug/
 
 *.vsix
 
-binary/.continue
+.continuerules

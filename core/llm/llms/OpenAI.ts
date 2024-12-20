@@ -1,13 +1,22 @@
 import {
+  ChatCompletionCreateParams,
+  ChatCompletionMessageParam,
+} from "openai/resources/index";
+
+import {
   ChatMessage,
   CompletionOptions,
   IDE,
   LLMOptions,
-  ModelProvider,
   Tool,
 } from "../../index.js";
 import { renderChatMessage } from "../../util/messageContent.js";
 import { BaseLLM } from "../index.js";
+import {
+  fromChatCompletionChunk,
+  LlmApiRequestType,
+  toChatBody,
+} from "../openaiTypeConverters.js";
 import { streamSse } from "../stream.js";
 
 const NON_CHAT_MODELS = [
@@ -43,6 +52,19 @@ const CHAT_ONLY_MODELS = [
   "o1-mini",
 ];
 
+const formatMessageForO1 = (messages: ChatCompletionMessageParam[]) => {
+  return messages?.map((message: any) => {
+    if (message?.role === "system") {
+      return {
+        ...message,
+        role: "user",
+      };
+    }
+
+    return message;
+  });
+};
+
 const deepseekApi = "http://api.lingxi.eastcom-sw.com/openai/";
 
 let ide: IDE | undefined = undefined;
@@ -56,48 +78,20 @@ class OpenAI extends BaseLLM {
     ide = options.ide;
   }
 
-  static providerName: ModelProvider = "openai";
-  static defaultOptions: Partial<LLMOptions> = {
+  static providerName = "openai";
+  static defaultOptions: Partial<LLMOptions> | undefined = {
     apiBase: "https://api.openai.com/v1/",
+    maxEmbeddingBatchSize: 128,
   };
 
-  protected _convertMessage(message: ChatMessage) {
-    if (message.role === "tool") {
-      return {
-        role: "tool",
-        content: message.content,
-        tool_call_id: message.toolCallId,
-      };
-    }
-
-    if (typeof message.content === "string") {
-      return message;
-    } else if (!message.content.some((item) => item.type !== "text")) {
-      // If no multi-media is in the message, just send as text
-      // for compatibility with OpenAI "compatible" servers
-      // that don't support multi-media format
-      return {
-        ...message,
-        content: message.content.map((item) => item.text).join(""),
-      };
-    }
-
-    const parts = message.content.map((part) => {
-      const msg: any = {
-        type: part.type,
-        text: part.text,
-      };
-      if (part.type === "imageUrl") {
-        msg.image_url = { ...part.imageUrl, detail: "auto" };
-        msg.type = "image_url";
-      }
-      return msg;
-    });
-    return {
-      ...message,
-      content: parts,
-    };
-  }
+  protected useOpenAIAdapterFor: (LlmApiRequestType | "*")[] = [
+    "chat",
+    "embed",
+    "list",
+    "rerank",
+    "streamChat",
+    "streamFim",
+  ];
 
   protected _convertModelName(model: string): string {
     return model;
@@ -126,35 +120,32 @@ class OpenAI extends BaseLLM {
     };
   }
 
-  protected _convertArgs(options: CompletionOptions, messages: ChatMessage[]) {
-    const url = new URL(
-      options.model == "deepseek-coder" ? deepseekApi : this.apiBase!,
-    );
-    const tools = options.tools?.map(this.convertTool);
+  protected getMaxStopWords(): number {
+    const url = new URL(this.apiBase!);
 
-    const finalOptions: any = {
-      messages: messages.map(this._convertMessage),
-      model: this._convertModelName(options.model),
-      max_tokens: options.maxTokens,
-      temperature: options.temperature,
-      top_p: options.topP,
-      frequency_penalty: options.frequencyPenalty,
-      presence_penalty: options.presencePenalty,
-      stream: options.stream ?? true,
-      stop:
-        // Jan + Azure OpenAI don't truncate and will throw an error
-        this.maxStopWords !== undefined
-          ? options.stop?.slice(0, this.maxStopWords)
-          : url.host === "api.deepseek.com"
-            ? options.stop?.slice(0, 16)
-            : url.port === "1337" ||
-                url.host === "api.openai.com" ||
-                url.host === "api.groq.com" ||
-                this.apiType === "azure"
-              ? options.stop?.slice(0, 4)
-              : options.stop,
-      tools,
-    };
+    if (this.maxStopWords !== undefined) {
+      return this.maxStopWords;
+    } else if (url.host === "api.deepseek.com") {
+      return 16;
+    } else if (
+      url.port === "1337" ||
+      url.host === "api.openai.com" ||
+      url.host === "api.groq.com" ||
+      this.apiType === "azure"
+    ) {
+      return 4;
+    } else {
+      return Infinity;
+    }
+  }
+
+  protected _convertArgs(
+    options: CompletionOptions,
+    messages: ChatMessage[],
+  ): ChatCompletionCreateParams {
+    const finalOptions = toChatBody(messages, options);
+
+    finalOptions.stop = options.stop?.slice(0, this.getMaxStopWords());
 
     // OpenAI o1-preview and o1-mini:
     if (this.isO1Model(options.model)) {
@@ -163,9 +154,7 @@ class OpenAI extends BaseLLM {
       finalOptions.max_tokens = undefined;
 
       // b) don't support system message
-      finalOptions.messages = finalOptions.messages?.filter(
-        (message: any) => message?.role !== "system",
-      );
+      finalOptions.messages = formatMessageForO1(finalOptions.messages);
     }
 
     if (options.prediction && this.supportsPrediction(options.model)) {
@@ -180,6 +169,8 @@ class OpenAI extends BaseLLM {
       finalOptions.max_completion_tokens = undefined;
 
       finalOptions.prediction = options.prediction;
+    } else {
+      finalOptions.prediction = undefined;
     }
 
     return finalOptions;
@@ -245,6 +236,36 @@ class OpenAI extends BaseLLM {
     }
   }
 
+  protected modifyChatBody(
+    body: ChatCompletionCreateParams,
+  ): ChatCompletionCreateParams {
+    body.stop = body.stop?.slice(0, this.getMaxStopWords());
+
+    // OpenAI o1-preview and o1-mini:
+    if (this.isO1Model(body.model)) {
+      // a) use max_completion_tokens instead of max_tokens
+      body.max_completion_tokens = body.max_tokens;
+      body.max_tokens = undefined;
+
+      // b) don't support system message
+      body.messages = formatMessageForO1(body.messages);
+    }
+
+    if (body.prediction && this.supportsPrediction(body.model)) {
+      if (body.presence_penalty) {
+        // prediction doesn't support > 0
+        body.presence_penalty = undefined;
+      }
+      if (body.frequency_penalty) {
+        // prediction doesn't support > 0
+        body.frequency_penalty = undefined;
+      }
+      body.max_completion_tokens = undefined;
+    }
+
+    return body;
+  }
+
   protected async *_legacystreamComplete(
     prompt: string,
     signal: AbortSignal,
@@ -304,6 +325,7 @@ class OpenAI extends BaseLLM {
     }
 
     const body = this._convertArgs(options, messages);
+
     // Empty messages cause an error in LM Studio
     body.messages = body.messages.map((m: any) => ({
       ...m,
@@ -335,26 +357,9 @@ class OpenAI extends BaseLLM {
     }
 
     for await (const value of streamSse(response)) {
-      if (value.choices?.[0]?.delta?.content) {
-        yield {
-          role: "assistant",
-          content: value.choices[0].delta.content,
-        };
-      } else if (value.choices?.[0]?.delta?.tool_calls) {
-        yield {
-          role: "assistant",
-          content: "",
-          toolCalls: value.choices?.[0]?.delta?.tool_calls.map(
-            (tool_call: any) => ({
-              id: tool_call.id,
-              type: tool_call.type,
-              function: {
-                name: tool_call.function.name,
-                arguments: tool_call.function.arguments,
-              },
-            }),
-          ),
-        };
+      const chunk = fromChatCompletionChunk(value);
+      if (chunk) {
+        yield chunk;
       }
     }
   }
@@ -402,6 +407,44 @@ class OpenAI extends BaseLLM {
 
     const data = await response.json();
     return data.data.map((m: any) => m.id);
+  }
+
+  private _getEmbedEndpoint() {
+    if (!this.apiBase) {
+      throw new Error(
+        "No API base URL provided. Please set the 'apiBase' option in config.json",
+      );
+    }
+
+    if (this.apiType === "azure") {
+      return new URL(
+        `openai/deployments/${this.deployment}/embeddings?api-version=${this.apiVersion}`,
+        this.apiBase,
+      );
+    }
+    return new URL("embeddings", this.apiBase);
+  }
+
+  protected async _embed(chunks: string[]): Promise<number[][]> {
+    const resp = await this.fetch(this._getEmbedEndpoint(), {
+      method: "POST",
+      body: JSON.stringify({
+        input: chunks,
+        model: this.model,
+      }),
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+        "api-key": this.apiKey ?? "", // For Azure
+      },
+    });
+
+    if (!resp.ok) {
+      throw new Error(await resp.text());
+    }
+
+    const data = (await resp.json()) as any;
+    return data.data.map((result: { embedding: number[] }) => result.embedding);
   }
 }
 

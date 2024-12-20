@@ -1,5 +1,6 @@
 import path from "path";
 
+import { fetchwithRequestOptions } from "@continuedev/fetch";
 import ignore from "ignore";
 import { v4 as uuidv4 } from "uuid";
 
@@ -27,7 +28,6 @@ import { callTool } from "./tools/callTool";
 import { ChatDescriber } from "./util/chatDescriber";
 import { logDevData } from "./util/devdata";
 import { DevDataSqliteDb } from "./util/devdataSqlite";
-import { fetchwithRequestOptions } from "./util/fetchWithOptions";
 import { GlobalContext } from "./util/GlobalContext";
 import historyManager from "./util/history";
 import { editConfigJson, setupInitialDotContinueDirectory } from "./util/paths";
@@ -35,9 +35,9 @@ import { Telemetry } from "./util/posthog";
 import { getSymbolsForManyFiles } from "./util/treeSitter";
 import { TTS } from "./util/tts";
 
-import type { ContextItemId, IDE, IndexingProgressUpdate } from ".";
+import { type ContextItemId, type IDE, type IndexingProgressUpdate } from ".";
 import type { FromCoreProtocol, ToCoreProtocol } from "./protocol";
-import type { IMessenger, Message } from "./util/messenger";
+import type { IMessenger, Message } from "./protocol/messenger";
 
 export class Core {
   // implements IMessenger<ToCoreProtocol, FromCoreProtocol>
@@ -72,7 +72,7 @@ export class Core {
     data: FromCoreProtocol[T][0],
     messageId?: string,
   ): string {
-    return this.messenger.send(messageType, data);
+    return this.messenger.send(messageType, data, messageId);
   }
 
   // TODO: It shouldn't actually need an IDE type, because this can happen
@@ -195,6 +195,8 @@ export class Core {
 
     const on = this.messenger.on.bind(this.messenger);
 
+    // Note, VsCode's in-process messenger doesn't do anything with this
+    // It will only show for jetbrains
     this.messenger.onError((err) => {
       console.error(err);
       void Telemetry.capture("core_messenger_error", {
@@ -379,7 +381,6 @@ export class Core {
       msg: Message<ToCoreProtocol["llm/streamChat"][0]>,
     ) {
       const config = await configHandler.loadConfig();
-
       // Stop TTS on new StreamChat
       if (config.experimental?.readResponseTTS) {
         void TTS.kill();
@@ -748,7 +749,7 @@ export class Core {
     });
     on("indexing/setPaused", async (msg) => {
       if (msg.data.type === "docs") {
-        this.docsService.setPaused(msg.data.id, msg.data.paused);
+        // this.docsService.setPaused(msg.data.id, msg.data.paused);
       }
     });
     on("docs/getSuggestedDocs", async (msg) => {
@@ -873,10 +874,7 @@ export class Core {
       this.indexingCancellationController &&
       !this.indexingCancellationController.signal.aborted
     ) {
-      return console.debug(
-        "Codebase indexing already in progress, skipping indexing of files\n" +
-          files.join("\n"),
-      );
+      return;
     }
     this.indexingCancellationController = new AbortController();
     for await (const update of (await this.codebaseIndexerPromise).refreshFiles(

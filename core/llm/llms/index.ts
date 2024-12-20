@@ -32,7 +32,7 @@ import LlamaCpp from "./LlamaCpp";
 import Llamafile from "./Llamafile";
 import LMStudio from "./LMStudio";
 import Mistral from "./Mistral";
-import Mock from "./Mock";
+import MockLLM from "./Mock";
 import Moonshot from "./Moonshot";
 import Msty from "./Msty";
 import Nebius from "./Nebius";
@@ -43,16 +43,18 @@ import OpenRouter from "./OpenRouter";
 import Replicate from "./Replicate";
 import SageMaker from "./SageMaker";
 import SambaNova from "./SambaNova";
+import Scaleway from "./Scaleway";
+import SiliconFlow from "./SiliconFlow";
 import ContinueProxy from "./stubs/ContinueProxy";
+import TestLLM from "./Test";
 import TextGenWebUI from "./TextGenWebUI";
 import Together from "./Together";
 import VertexAI from "./VertexAI";
 import Vllm from "./Vllm";
 import WatsonX from "./WatsonX";
 import xAI from "./xAI";
-import SiliconFlow from "./SiliconFlow";
 
-const LLMs = [
+export const LLMClasses = [
   Anthropic,
   Cohere,
   FreeTrial,
@@ -88,13 +90,15 @@ const LLMs = [
   Nvidia,
   Vllm,
   SambaNova,
-  Mock,
+  MockLLM,
+  TestLLM,
   Cerebras,
   Asksage,
   Nebius,
   VertexAI,
   xAI,
   SiliconFlow,
+  Scaleway,
 ];
 
 export async function llmFromDescription(
@@ -107,7 +111,7 @@ export async function llmFromDescription(
   systemMessage?: string,
   ide?: IDE | undefined,
 ): Promise<BaseLLM | undefined> {
-  const cls = LLMs.find((llm) => llm.providerName === desc.provider);
+  const cls = LLMClasses.find((llm) => llm.providerName === desc.provider);
 
   if (!cls) {
     return undefined;
@@ -156,7 +160,7 @@ export function llmFromProviderAndOptions(
   providerName: string,
   llmOptions: LLMOptions,
 ): ILLM {
-  const cls = LLMs.find((llm) => llm.providerName === providerName);
+  const cls = LLMClasses.find((llm) => llm.providerName === providerName);
 
   if (!cls) {
     throw new Error(`Unknown LLM provider type "${providerName}"`);
