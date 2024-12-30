@@ -38,8 +38,8 @@ export class ReverseMessageIde {
       return this.ide.getGitHubAuthToken(data);
     });
 
-    this.on("getLastModified", (data) => {
-      return this.ide.getLastModified(data.files);
+    this.on("getFileStats", (data) => {
+      return this.ide.getFileStats(data.files);
     });
 
     this.on("getGitRootPath", (data) => {
@@ -117,10 +117,6 @@ export class ReverseMessageIde {
       return this.ide.showLines(data.filepath, data.startLine, data.endLine);
     });
 
-    this.on("listFolders", () => {
-      return this.ide.listFolders();
-    });
-
     this.on("getControlPlaneSessionInfo", async (msg) => {
       // Not supported in testing
       return undefined;
@@ -163,10 +159,6 @@ export class ReverseMessageIde {
       return this.ide.readFile(data.filepath);
     });
 
-    this.on("showDiff", (data) => {
-      return this.ide.showDiff(data.filepath, data.newContents, data.stepIndex);
-    });
-
     this.on("getOpenFiles", () => {
       return this.ide.getOpenFiles();
     });
@@ -193,9 +185,6 @@ export class ReverseMessageIde {
 
     this.on("getBranch", (data) => {
       return this.ide.getBranch(data.dir);
-    });
-    this.on("pathSep", (data) => {
-      return this.ide.pathSep();
     });
   }
 }
