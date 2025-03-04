@@ -13,6 +13,7 @@ import type {
   Problem,
   Range,
   RangeInFile,
+  TerminalOptions,
   Thread,
 } from "../..";
 
@@ -27,6 +28,14 @@ export class MessageIde implements IDE {
       callback: (data: FromIdeProtocol[T][0]) => FromIdeProtocol[T][1],
     ) => void,
   ) {}
+
+  async readSecrets(keys: string[]): Promise<Record<string, string>> {
+    return this.request("readSecrets", { keys });
+  }
+
+  async writeSecrets(secrets: { [key: string]: string }): Promise<void> {
+    return this.request("writeSecrets", { secrets });
+  }
 
   fileExists(fileUri: string): Promise<boolean> {
     return this.request("fileExists", { filepath: fileUri });
@@ -151,8 +160,8 @@ export class MessageIde implements IDE {
     await this.request("openUrl", url);
   }
 
-  async runCommand(command: string): Promise<void> {
-    await this.request("runCommand", { command });
+  async runCommand(command: string, options?: TerminalOptions): Promise<void> {
+    await this.request("runCommand", { command, options });
   }
 
   async saveFile(fileUri: string): Promise<void> {

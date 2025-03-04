@@ -17,8 +17,17 @@ import {
 } from "vscode";
 
 import { PromiseAdapter, promiseFromEvent } from "./promiseUtils";
+import { SecretStorage } from "./SecretStorage";
 
 const AUTH_NAME = "Continue";
+
+const enableControlServerBeta = workspace
+  .getConfiguration(EXTENSION_NAME)
+  .get<boolean>("enableContinueForTeams", false);
+const controlPlaneEnv = getControlPlaneEnvSync(
+  true ? "production" : "none",
+  enableControlServerBeta,
+);
 
 const SESSIONS_SECRET_KEY = `${controlPlaneEnv.AUTH_TYPE}.sessions`;
 
@@ -27,14 +36,6 @@ class UriEventHandler extends EventEmitter<Uri> implements UriHandler {
     this.fire(uri);
   }
 }
-
-import { ControlPlaneSessionInfo } from "core/control-plane/client";
-import { controlPlaneEnv } from "core/control-plane/env";
-
-import crypto from "crypto";
-
-import { SecretStorage } from "./SecretStorage";
-
 // Function to generate a random string of specified length
 function generateRandomString(length: number): string {
   const possibleCharacters =
@@ -164,12 +165,6 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
   }
 
   get ideRedirectUri() {
-    const publisher = this.context.extension.packageJSON.publisher;
-    const name = this.context.extension.packageJSON.name;
-    return `${env.uriScheme}://${publisher}.${name}`;
-  }
-
-  get redirectUri() {
     if (
       env.uriScheme === "vscode-insiders" ||
       env.uriScheme === "vscode" ||
@@ -178,6 +173,18 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
       // We redirect to a page that says "you can close this page", and that page finishes the redirect
       const url = new URL(controlPlaneEnv.APP_URL);
       url.pathname = `/auth/${env.uriScheme}-redirect`;
+      return url.toString();
+    }
+    const publisher = this.context.extension.packageJSON.publisher;
+    const name = this.context.extension.packageJSON.name;
+    return `${env.uriScheme}://${publisher}.${name}`;
+  }
+
+  public static useOnboardingUri: boolean = false;
+  get redirectUri() {
+    if (WorkOsAuthProvider.useOnboardingUri) {
+      const url = new URL(controlPlaneEnv.APP_URL);
+      url.pathname = `/onboarding/redirect/${env.uriScheme}`;
       return url.toString();
     }
     return this.ideRedirectUri;
@@ -408,8 +415,9 @@ export class WorkOsAuthProvider implements AuthenticationProvider, Disposable {
         try {
           return await Promise.race([
             codeExchangePromise.promise,
-            new Promise<string>((_, reject) =>
-              setTimeout(() => reject("Cancelled"), 15 * 60 * 1_000),
+            new Promise<string>(
+              (_, reject) =>
+                setTimeout(() => reject("Cancelled"), 60 * 60 * 1_000), // 60min timeout
             ),
             promiseFromEvent<any, any>(
               token.onCancellationRequested,

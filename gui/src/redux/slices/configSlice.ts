@@ -1,7 +1,6 @@
+import { ConfigResult, ConfigValidationError } from "@continuedev/config-yaml";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { BrowserSerializedContinueConfig } from "core";
-import { ConfigResult } from "core/config/load";
-import { ConfigValidationError } from "core/config/validation";
 import { DEFAULT_MAX_TOKENS } from "core/llm/constants";
 
 export type ConfigState = {
@@ -27,6 +26,25 @@ const initialState: ConfigState = {
     contextProviders: [],
     models: [],
     tools: [],
+    usePlatform: true,
+    modelsByRole: {
+      chat: [],
+      apply: [],
+      edit: [],
+      summarize: [],
+      autocomplete: [],
+      rerank: [],
+      embed: [],
+    },
+    selectedModelByRole: {
+      chat: null,
+      apply: null,
+      edit: null,
+      summarize: null,
+      autocomplete: null,
+      rerank: null,
+      embed: null,
+    },
   },
 };
 
@@ -55,6 +73,12 @@ export const configSlice = createSlice({
       state.config = config;
       state.defaultModelTitle = defaultModelTitle;
     },
+    updateConfig: (
+      state,
+      { payload: config }: PayloadAction<BrowserSerializedContinueConfig>,
+    ) => {
+      state.config = config;
+    },
     setConfigError: (
       state,
       { payload: error }: PayloadAction<ConfigValidationError[] | undefined>,
@@ -72,6 +96,20 @@ export const configSlice = createSlice({
       return {
         ...state,
         defaultModelTitle: payload.title,
+      };
+    },
+    cycleDefaultModel: (state, { payload }: PayloadAction<"next" | "prev">) => {
+      const currentIndex = state.config.models.findIndex(
+        (model) => model.title === state.defaultModelTitle,
+      );
+      const nextIndex =
+        (currentIndex +
+          (payload === "next" ? 1 : -1) +
+          state.config.models.length) %
+        state.config.models.length;
+      return {
+        ...state,
+        defaultModelTitle: state.config.models[nextIndex].title,
       };
     },
   },
@@ -93,8 +131,13 @@ export const configSlice = createSlice({
   },
 });
 
-export const { setDefaultModel, setConfigResult, setConfigError } =
-  configSlice.actions;
+export const {
+  setDefaultModel,
+  cycleDefaultModel,
+  updateConfig,
+  setConfigResult,
+  setConfigError,
+} = configSlice.actions;
 
 export const {
   selectDefaultModel,

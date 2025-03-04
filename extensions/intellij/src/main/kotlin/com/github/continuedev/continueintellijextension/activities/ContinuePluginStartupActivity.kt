@@ -10,7 +10,7 @@ import com.github.continuedev.continueintellijextension.listeners.ContinuePlugin
 import com.github.continuedev.continueintellijextension.services.ContinueExtensionSettings
 import com.github.continuedev.continueintellijextension.services.ContinuePluginService
 import com.github.continuedev.continueintellijextension.services.SettingsListener
-import com.intellij.openapi.Disposable
+import com.github.continuedev.continueintellijextension.utils.toUriOrNull
 import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ApplicationNamesInfo
@@ -37,6 +37,7 @@ import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent
 import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent
+import com.intellij.ide.ui.LafManagerListener
 
 fun showTutorial(project: Project) {
     val tutorialFileName = getTutorialFileName()
@@ -47,7 +48,15 @@ fun showTutorial(project: Project) {
                 throw IOException("Resource not found: $tutorialFileName")
             }
             var content = StreamUtil.readText(`is`, StandardCharsets.UTF_8)
+            
+            // All jetbrains will use J instead of L
+            content = content.replace("[Cmd + L]", "[Cmd + J]")
+            content = content.replace("[Cmd + Shift + L]", "[Cmd + Shift + J]")
+
             if (!System.getProperty("os.name").lowercase().contains("mac")) {
+                content = content.replace("[Cmd + J]", "[Ctrl + J]")
+                content = content.replace("[Cmd + Shift + J]", "[Ctrl + Shift + J]")
+                content = content.replace("[Cmd + I]", "[Ctrl + I]")
                 content = content.replace("⌘", "⌃")
             }
             val filepath = Paths.get(getContinueGlobalPath(), tutorialFileName).toString()
@@ -162,7 +171,7 @@ class ContinuePluginStartupActivity : StartupActivity, DumbAware {
                 override fun after(events: List<VFileEvent>) {
                     // Collect all relevant URIs for deletions
                     val deletedURIs = events.filterIsInstance<VFileDeleteEvent>()
-                        .map { event -> event.file.url }
+                        .mapNotNull { event -> event.file.toUriOrNull() }
 
                     // Send "files/deleted" message if there are any deletions
                     if (deletedURIs.isNotEmpty()) {
@@ -172,9 +181,9 @@ class ContinuePluginStartupActivity : StartupActivity, DumbAware {
 
                     // Collect all relevant URIs for content changes
                     val changedURIs = events.filterIsInstance<VFileContentChangeEvent>()
-                        .map { event -> event.file.url }
+                        .mapNotNull { event -> event.file.toUriOrNull() }
 
-                    // Send "files/changed" message if there are any content changes
+                    // Notify core of content changes
                     if (changedURIs.isNotEmpty()) {
                         val data = mapOf("files" to changedURIs)
                         continuePluginService.coreMessenger?.request("files/changed", data, null) { _ -> }
@@ -182,6 +191,15 @@ class ContinuePluginStartupActivity : StartupActivity, DumbAware {
                 }
             })
 
+            // Listen for theme changes
+            connection.subscribe(LafManagerListener.TOPIC, LafManagerListener {
+                val colors = GetTheme().getTheme();
+                continuePluginService.sendToWebview(
+                    "jetbrains/setColors",
+                    colors
+                )
+            })
+            
             // Listen for clicking settings button to start the auth flow
             val authService = service<ContinueAuthService>()
             val initialSessionInfo = authService.loadControlPlaneSessionInfo()
@@ -196,7 +214,7 @@ class ContinuePluginStartupActivity : StartupActivity, DumbAware {
 
             connection.subscribe(AuthListener.TOPIC, object : AuthListener {
                 override fun startAuthFlow() {
-                    authService.startAuthFlow(project)
+                    authService.startAuthFlow(project, false)
                 }
 
                 override fun handleUpdatedSessionInfo(sessionInfo: ControlPlaneSessionInfo?) {
@@ -220,7 +238,7 @@ class ContinuePluginStartupActivity : StartupActivity, DumbAware {
             // Reload the WebView
             continuePluginService?.let { pluginService ->
                 val allModulePaths = ModuleManager.getInstance(project).modules
-                    .flatMap { module -> ModuleRootManager.getInstance(module).contentRoots.map { it.url } }
+                    .flatMap { module -> ModuleRootManager.getInstance(module).contentRoots.mapNotNull { it.toUriOrNull() } }
 
                 val topLevelModulePaths = allModulePaths
                     .filter { modulePath -> allModulePaths.none { it != modulePath && modulePath.startsWith(it) } }

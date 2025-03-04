@@ -44,11 +44,6 @@ class IdeProtocolClient(
         )
     }
 
-    private fun send(messageType: String, data: Any?, messageId: String? = null) {
-        val id = messageId ?: uuid()
-        continuePluginService.sendToWebview(messageType, data, id)
-    }
-
     fun handleMessage(msg: String, respond: (Any?) -> Unit) {
         coroutineScope.launch(Dispatchers.IO) {
             val message = Gson().fromJson(msg, Message::class.java)
@@ -57,6 +52,10 @@ class IdeProtocolClient(
 
             try {
                 when (messageType) {
+                    "toggleDevTools" -> {
+                        continuePluginService.continuePluginWindow?.browser?.browser?.openDevtools()
+                    }
+
                     "showTutorial" -> {
                         showTutorial(project)
                     }
@@ -453,7 +452,7 @@ class IdeProtocolClient(
 
                         if (editor.document.text.trim().isEmpty()) {
                             WriteCommandAction.runWriteCommandAction(project) {
-                                editor.document.insertString(0, msg)
+                                editor.document.insertString(0, params.text)
                             }
                             respond(null)
                             return@launch
@@ -467,8 +466,13 @@ class IdeProtocolClient(
                                     null,
                                     null
                                 ) { response ->
-                                    val config = (response as Map<String, Any>)["config"] as Map<String, Any>
-                                    val applyCodeBlockModel = getModelByRole(config, "applyCodeBlock")
+                                    val responseObject = response as Map<*, *>
+                                    val responseContent = responseObject["content"] as Map<*, *>
+                                    val result = responseContent["result"] as Map<*, *>
+                                    val config = result["config"] as Map<String, Any>
+
+                                    val selectedModels = config["selectedModelByRole"] as Map<String, Any>
+                                    val applyCodeBlockModel = selectedModels["apply"] as Map<String, Any>
 
                                     if (applyCodeBlockModel != null) {
                                         continuation.resume(applyCodeBlockModel)
@@ -478,7 +482,6 @@ class IdeProtocolClient(
                                         config["models"] as List<Map<String, Any>>
                                     val curSelectedModel = models.find { it["title"] == params.curSelectedModelTitle }
 
-//                                    continuation.resume(curSelectedModel)
                                     if (curSelectedModel == null) {
                                         return@request
                                     } else {
@@ -496,6 +499,10 @@ class IdeProtocolClient(
                             return@launch
                         }
 
+
+                        val diffStreamService = project.service<DiffStreamService>()
+                        // Clear all diff blocks before running the diff stream
+                        diffStreamService.reject(editor)
 
                         val llmTitle = (llm as? Map<*, *>)?.get("title") as? String ?: ""
 
@@ -529,7 +536,6 @@ class IdeProtocolClient(
                                 rif?.range?.end?.line ?: (editor.document.lineCount - 1),
                                 {}, {})
 
-                        val diffStreamService = project.service<DiffStreamService>()
                         diffStreamService.register(diffStreamHandler, editor)
 
                         diffStreamHandler.streamDiffLinesToEditor(
@@ -574,12 +580,14 @@ class IdeProtocolClient(
             val startChar = startOffset - document.getLineStartOffset(startLine)
             val endChar = endOffset - document.getLineStartOffset(endLine)
 
-            return@runReadAction RangeInFileWithContents(
-                virtualFile.url, Range(
-                    Position(startLine, startChar),
-                    Position(endLine, endChar)
-                ), selectedText
-            )
+            return@runReadAction virtualFile.toUriOrNull()?.let {
+                RangeInFileWithContents(
+                    it, Range(
+                        Position(startLine, startChar),
+                        Position(endLine, endChar)
+                    ), selectedText
+                )
+            }
         }
 
         return result
@@ -599,25 +607,10 @@ class IdeProtocolClient(
 
 
     fun sendAcceptRejectDiff(accepted: Boolean, stepIndex: Int) {
-        send("acceptRejectDiff", AcceptRejectDiff(accepted, stepIndex), uuid())
+        continuePluginService.sendToWebview("acceptRejectDiff", AcceptRejectDiff(accepted, stepIndex), uuid())
     }
 
     fun deleteAtIndex(index: Int) {
-        send("deleteAtIndex", DeleteAtIndex(index), uuid())
-    }
-
-    private fun getModelByRole(
-        config: Any,
-        role: Any
-    ): Any? {
-        val experimental = (config as? Map<*, *>)?.get("experimental") as? Map<*, *>
-        val roleTitle = (experimental?.get("modelRoles") as? Map<*, *>)?.get(role) as? String ?: return null
-
-        val models = (config as? Map<*, *>)?.get("models") as? List<*>
-        val matchingModel = models?.find { model ->
-            (model as? Map<*, *>)?.get("title") == roleTitle
-        }
-
-        return matchingModel
+        continuePluginService.sendToWebview("deleteAtIndex", DeleteAtIndex(index), uuid())
     }
 }

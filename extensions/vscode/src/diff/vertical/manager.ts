@@ -1,15 +1,15 @@
-import { DiffLine } from "core";
+import { ChatMessage, DiffLine } from "core";
 import { ConfigHandler } from "core/config/ConfigHandler";
 import { streamDiffLines } from "core/edit/streamDiffLines";
 import { pruneLinesFromBottom, pruneLinesFromTop } from "core/llm/countTokens";
 import { getMarkdownLanguageTagForFile } from "core/util";
+import * as URI from "uri-js";
 import * as vscode from "vscode";
 
 import EditDecorationManager from "../../quickEdit/EditDecorationManager";
 import { VsCodeWebviewProtocol } from "../../webviewProtocol";
 
 import { VerticalDiffHandler, VerticalDiffHandlerOptions } from "./handler";
-import * as URI from "uri-js";
 
 export interface VerticalDiffCodeLens {
   start: number;
@@ -272,6 +272,7 @@ export class VerticalDiffManager {
     onlyOneInsertion?: boolean,
     quickEdit?: string,
     range?: vscode.Range,
+    newCode?: string,
   ): Promise<string | undefined> {
     vscode.commands.executeCommand("setContext", "continue.diffVisible", true);
 
@@ -386,6 +387,18 @@ export class VerticalDiffManager {
       llm.model,
     );
 
+    let overridePrompt: ChatMessage[] | undefined;
+    if (llm.promptTemplates?.apply) {
+      const rendered = llm.renderPromptTemplate(llm.promptTemplates.apply, [], {
+        original_code: rangeContent,
+        new_code: newCode ?? "",
+      });
+      overridePrompt =
+        typeof rendered === "string"
+          ? [{ role: "user", content: rendered }]
+          : rendered;
+    }
+
     if (editor.selection) {
       // Unselect the range
       editor.selection = new vscode.Selection(
@@ -413,7 +426,8 @@ export class VerticalDiffManager {
           llm,
           input,
           getMarkdownLanguageTagForFile(fileUri),
-          onlyOneInsertion,
+          !!onlyOneInsertion,
+          overridePrompt,
         );
 
         for await (const line of stream) {

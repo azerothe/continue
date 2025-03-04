@@ -2,8 +2,8 @@ import { useCallback, useContext, useEffect, useRef } from "react";
 import { VSC_THEME_COLOR_VARS } from "../components";
 import { IdeMessengerContext } from "../context/IdeMessenger";
 
+import { ConfigResult } from "@continuedev/config-yaml";
 import { BrowserSerializedContinueConfig } from "core";
-import { ConfigResult } from "core/config/load";
 import { useAppDispatch, useAppSelector } from "../redux/hooks";
 import { setConfigError, setConfigResult } from "../redux/slices/configSlice";
 import { updateIndexingStatus } from "../redux/slices/indexingSlice";
@@ -11,9 +11,9 @@ import { updateDocsSuggestions } from "../redux/slices/miscSlice";
 import {
   addContextItemsAtIndex,
   setInactive,
-  setSelectedProfileId,
 } from "../redux/slices/sessionSlice";
 import { setTTSActive } from "../redux/slices/uiSlice";
+import { selectProfileThunk } from "../redux/thunks/profileAndOrg";
 import { refreshSessionMetadata } from "../redux/thunks/session";
 import { streamResponseThunk } from "../redux/thunks/streamResponse";
 import { updateFileSymbolsFromHistory } from "../redux/thunks/updateFileSymbols";
@@ -36,7 +36,7 @@ function useSetup() {
       initial: boolean,
       result: {
         result: ConfigResult<BrowserSerializedContinueConfig>;
-        profileId: string;
+        profileId: string | null;
       },
     ) => {
       const { result: configResult, profileId } = result;
@@ -45,7 +45,7 @@ function useSetup() {
       }
       hasLoadedConfig.current = true;
       dispatch(setConfigResult(configResult));
-      dispatch(setSelectedProfileId(profileId));
+      dispatch(selectProfileThunk(profileId));
 
       // Perform any actions needed with the config
       if (configResult.config?.ui?.fontSize) {
@@ -65,7 +65,6 @@ function useSetup() {
       if (result.status === "error") {
         return;
       }
-      console.log("Config loaded", result.content);
       await handleConfigUpdate(initial, result.content);
     },
     [ideMessenger, handleConfigUpdate],
@@ -116,13 +115,33 @@ function useSetup() {
     // Override persisted state
     dispatch(setInactive());
 
-    if (isJetBrains()) {
+    const jetbrains = isJetBrains();
+    for (const colorVar of VSC_THEME_COLOR_VARS) {
+      if (jetbrains) {
+        const cached = localStorage.getItem(colorVar);
+        if (cached) {
+          document.body.style.setProperty(colorVar, cached);
+        }
+      }
+
+      // Remove alpha channel from colors
+      const value = getComputedStyle(document.documentElement).getPropertyValue(
+        colorVar,
+      );
+      if (colorVar.startsWith("#") && value.length > 7) {
+        document.body.style.setProperty(colorVar, value.slice(0, 7));
+      }
+    }
+
+    if (jetbrains) {
       // Save theme colors to local storage for immediate loading in JetBrains
       ideMessenger.request("jetbrains/getColors", undefined).then((result) => {
-        Object.keys(result).forEach((key) => {
-          document.body.style.setProperty(key, result[key]);
-          document.documentElement.style.setProperty(key, result[key]);
-        });
+        if (result.status === "success") {
+          Object.entries(result.content).forEach(([key, value]) => {
+            document.body.style.setProperty(key, value);
+            document.documentElement.style.setProperty(key, value);
+          });
+        }
       });
 
       // Tell JetBrains the webview is ready
@@ -149,6 +168,17 @@ function useSetup() {
       }
     }
   }, []);
+
+  useWebviewListener(
+    "jetbrains/setColors",
+    async (data) => {
+      Object.entries(data).forEach(([key, value]) => {
+        document.body.style.setProperty(key, value);
+        document.documentElement.style.setProperty(key, value);
+      });
+    },
+    [],
+  );
 
   useWebviewListener("docs/suggestions", async (data) => {
     dispatch(updateDocsSuggestions(data));

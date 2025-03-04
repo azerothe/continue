@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import {
-  ContextSubmenuItemWithProvider,
-  useSubmenuContextProviders,
-} from "../../context/SubmenuContextProviders";
+import { useSubmenuContextProviders } from "../../context/SubmenuContextProviders";
 import { Combobox } from "@headlessui/react";
 import FileIcon from "../FileIcon";
 import { useAppSelector } from "../../redux/hooks";
+import { ContextSubmenuItemWithProvider } from "core";
 
 export interface AddFileComboboxProps {
-  onSelect: (filepaths: string[]) => void;
-  onEscape: () => void;
+  onSelect: (filepaths: string[]) => void | Promise<void>;
+  onEscape: () => void | Promise<void>;
 }
 
 export default function AddFileCombobox({
@@ -50,7 +48,7 @@ export default function AddFileCombobox({
         value={selectedFiles}
         onChange={(files) => {
           setSelectedFiles(files);
-          onSelect(files.map((file) => file.id));
+          void onSelect(files.map((file) => file.id));
           buttonRef.current?.click();
         }}
       >
@@ -72,7 +70,7 @@ export default function AddFileCombobox({
               placeholder="Type to search files..."
               onKeyDown={(e) => {
                 if (e.key === "Escape" && !open) {
-                  onEscape();
+                  void onEscape();
                 }
               }}
             />
@@ -86,7 +84,7 @@ export default function AddFileCombobox({
                     className={({ active }) =>
                       `relative flex w-full cursor-pointer px-2 py-1 text-left text-xs ${
                         active
-                          ? "bg-vsc-list-active-background text-vsc-list-active-foreground"
+                          ? "bg-list-active text-list-active-foreground"
                           : ""
                       }`
                     }
@@ -114,7 +112,7 @@ export default function AddFileCombobox({
                   </Combobox.Option>
                 ))
               ) : (
-                <div className="text-vsc-list-active-foreground0 px-2 py-1 text-xs">
+                <div className="text-list-active-foreground px-2 py-1 text-xs">
                   No results
                 </div>
               )}

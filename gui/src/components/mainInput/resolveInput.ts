@@ -6,6 +6,7 @@ import {
   MessageContent,
   MessagePart,
   RangeInFile,
+  TextMessagePart,
 } from "core";
 import { stripImages } from "core/util/messageContent";
 import { IIdeMessenger } from "../../context/IdeMessenger";
@@ -52,7 +53,6 @@ async function resolveEditorContent({
     for (const p of editorState.content) {
       if (p.type === "paragraph") {
         const [text, ctxItems, foundSlashCommand] = resolveParagraph(p);
-
         // Only take the first slash command\
         if (foundSlashCommand && typeof slashCommand === "undefined") {
           slashCommand = foundSlashCommand;
@@ -65,7 +65,7 @@ async function resolveEditorContent({
         }
 
         if (parts[parts.length - 1]?.type === "text") {
-          parts[parts.length - 1].text += "\n" + text;
+          (parts[parts.length - 1] as TextMessagePart).text += "\n" + text;
         } else {
           parts.push({ type: "text", text });
         }
@@ -88,7 +88,7 @@ async function resolveEditorContent({
               contextItem.content +
               "\n```";
             if (parts[parts.length - 1]?.type === "text") {
-              parts[parts.length - 1].text += "\n" + text;
+              (parts[parts.length - 1] as TextMessagePart).text += "\n" + text;
             } else {
               parts.push({
                 type: "text",
@@ -122,8 +122,8 @@ async function resolveEditorContent({
   let contextItems: ContextItemWithId[] = [];
   for (const item of contextItemAttrs) {
     const result = await ideMessenger.request("context/getContextItems", {
-      name: item.itemType === "contextProvider" ? item.id : item.itemType,
-      query: item.query,
+      name: item.itemType === "contextProvider" ? item.id : item.itemType!,
+      query: item.query ?? "",
       fullInput: stripImages(parts),
       selectedCode,
       selectedModelTitle,
@@ -181,9 +181,10 @@ async function resolveEditorContent({
 
   if (slashCommand) {
     let lastTextIndex = findLastIndex(parts, (part) => part.type === "text");
-    const lastPart = `${slashCommand} ${parts[lastTextIndex]?.text || ""}`;
+    const lastTextPart = parts[lastTextIndex] as TextMessagePart;
+    const lastPart = `${slashCommand} ${lastTextPart?.text || ""}`;
     if (parts.length > 0) {
-      parts[lastTextIndex].text = lastPart;
+      lastTextPart.text = lastPart;
     } else {
       parts = [{ type: "text", text: lastPart }];
     }
@@ -211,22 +212,22 @@ function resolveParagraph(
   p: JSONContent,
 ): [string, MentionAttrs[], string | undefined] {
   let text = "";
-  const contextItems = [];
+  const contextItems: MentionAttrs[] = [];
   let slashCommand: string | undefined = undefined;
   for (const child of p.content || []) {
     if (child.type === "text") {
-      text += text === "" ? child.text.trimStart() : child.text;
+      text += text === "" ? child.text?.trimStart() : child.text;
     } else if (child.type === "mention") {
       text +=
-        typeof child.attrs.renderInlineAs === "string"
+        typeof child.attrs?.renderInlineAs === "string"
           ? child.attrs.renderInlineAs
-          : child.attrs.label;
-      contextItems.push(child.attrs);
+          : child.attrs?.label;
+      contextItems.push(child.attrs as MentionAttrs);
     } else if (child.type === "slashcommand") {
       if (typeof slashCommand === "undefined") {
-        slashCommand = child.attrs.id;
+        slashCommand = child.attrs?.id;
       } else {
-        text += child.attrs.label;
+        text += child.attrs?.label;
       }
     } else {
       console.warn("Unexpected child type", child.type);
@@ -238,7 +239,7 @@ function resolveParagraph(
 export function hasSlashCommandOrContextProvider(
   editorState: JSONContent,
 ): boolean {
-  if (!editorState.content) {
+  if (!editorState?.content) {
     return false;
   }
 

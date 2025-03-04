@@ -1,4 +1,4 @@
-import { createAsyncThunk } from "@reduxjs/toolkit";
+import { createAsyncThunk, unwrapResult } from "@reduxjs/toolkit";
 import { ChatMessage, PromptLog } from "core";
 import { selectCurrentToolCall } from "../selectors/selectCurrentToolCall";
 import { selectDefaultModel } from "../slices/configSlice";
@@ -10,6 +10,7 @@ import {
 } from "../slices/sessionSlice";
 import { ThunkApiType } from "../store";
 import { callTool } from "./callTool";
+import { modelSupportsTools } from "core/llm/autodetect";
 
 export const streamNormalInput = createAsyncThunk<
   void,
@@ -22,28 +23,27 @@ export const streamNormalInput = createAsyncThunk<
   const toolSettings = state.ui.toolSettings;
   const streamAborter = state.session.streamAborter;
   const useTools = state.ui.useTools;
-
   if (!defaultModel) {
     throw new Error("Default model not defined");
   }
+
+  const includeTools =
+    useTools &&
+    modelSupportsTools(defaultModel) &&
+    state.session.mode === "chat";
 
   // Send request
   const gen = extra.ideMessenger.llmStreamChat(
     defaultModel.title,
     streamAborter.signal,
     messages,
-    {
-      tools: useTools
-        ? Object.keys(toolSettings)
-            .filter((tool) => toolSettings[tool] !== "disabled")
-            .map((toolName) =>
-              state.config.config.tools.find(
-                (tool) => tool.function.name === toolName,
-              ),
-            )
-            .filter(Boolean)
-        : undefined,
-    },
+    includeTools
+      ? {
+          tools: state.config.config.tools.filter(
+            (tool) => toolSettings[tool.function.name] !== "disabled",
+          ),
+        }
+      : {},
   );
 
   // Stream response
@@ -54,15 +54,41 @@ export const streamNormalInput = createAsyncThunk<
       break;
     }
 
-    const updates = next.value as ChatMessage[];
-    dispatch(streamUpdate(updates));
+    dispatch(streamUpdate(next.value));
     next = await gen.next();
   }
 
   // Attach prompt log
-  let returnVal = next.value as PromptLog;
-  if (returnVal) {
-    dispatch(addPromptCompletionPair([returnVal]));
+  if (next.done && next.value) {
+    dispatch(addPromptCompletionPair([next.value]));
+
+    try {
+      if (state.session.mode === "chat") {
+        extra.ideMessenger.post("devdata/log", {
+          name: "chatInteraction",
+          data: {
+            prompt: next.value.prompt,
+            completion: next.value.completion,
+            modelProvider: defaultModel.provider,
+            modelTitle: defaultModel.title,
+            sessionId: state.session.id,
+          },
+        });
+      }
+      // else if (state.session.mode === "edit") {
+      //   extra.ideMessenger.post("devdata/log", {
+      //     name: "editInteraction",
+      //     data: {
+      //       prompt: next.value.prompt,
+      //       completion: next.value.completion,
+      //       modelProvider: defaultModel.provider,
+      //       modelTitle: defaultModel.title,
+      //     },
+      //   });
+      // }
+    } catch (e) {
+      console.error("Failed to send dev data interaction log", e);
+    }
   }
 
   // If it's a tool call that is automatically accepted, we should call it
@@ -74,7 +100,8 @@ export const streamNormalInput = createAsyncThunk<
       toolSettings[toolCallState.toolCall.function.name] ===
       "allowedWithoutPermission"
     ) {
-      await dispatch(callTool());
+      const response = await dispatch(callTool());
+      unwrapResult(response);
     }
   }
 });

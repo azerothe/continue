@@ -1,6 +1,6 @@
+import { DataDestination, ModelRole } from "@continuedev/config-yaml";
 import Parser from "web-tree-sitter";
 import { GetGhTokenArgs } from "./protocol/ide";
-
 declare global {
   interface Window {
     ide?: "vscode";
@@ -60,7 +60,7 @@ export interface IndexingStatus {
   progress: number;
   description: string;
   status: "indexing" | "complete" | "paused" | "failed" | "aborted" | "pending";
-  embeddingsProviderId: string;
+  embeddingsProviderId?: string;
   isReindexing?: boolean;
   debugInfo?: string;
   title: string;
@@ -94,6 +94,8 @@ export interface ILLM extends LLMOptions {
   apiKey?: string;
   apiBase?: string;
   cacheBehavior?: CacheBehavior;
+  capabilities?: ModelCapability;
+  roles?: ModelRole[];
 
   deployment?: string;
   apiVersion?: string;
@@ -177,8 +179,8 @@ export type FetchFunction = (url: string | URL, init?: any) => Promise<any>;
 export interface ContextProviderExtras {
   config: ContinueConfig;
   fullInput: string;
-  embeddingsProvider: ILLM;
-  reranker: ILLM | undefined;
+  embeddingsProvider: ILLM | null;
+  reranker: ILLM | null;
   llm: ILLM;
   ide: IDE;
   selectedCode: RangeInFile[];
@@ -216,19 +218,25 @@ export interface ContextSubmenuItem {
   metadata?: any;
 }
 
-export interface SiteIndexingConfig {
-  title: string;
-  startUrl: string;
-  rootUrl?: string;
-  maxDepth?: number;
-  faviconUrl?: string;
+export interface ContextSubmenuItemWithProvider extends ContextSubmenuItem {
+  providerTitle: string;
 }
 
 export interface SiteIndexingConfig {
-  startUrl: string;
-  rootUrl?: string;
   title: string;
+  startUrl: string;
   maxDepth?: number;
+  faviconUrl?: string;
+  useLocalCrawling?: boolean;
+  rootUrl?: string; // Currently only used by preindexed docs
+}
+
+export interface DocsIndexingDetails {
+  startUrl: string;
+  config: SiteIndexingConfig;
+  indexingStatus: IndexingStatus | undefined;
+  chunks: Chunk[];
+  isPreIndexedDoc: boolean;
 }
 
 export interface IContextProvider {
@@ -302,11 +310,17 @@ export interface CompletionOptions extends BaseCompletionOptions {
 
 export type ChatMessageRole = "user" | "assistant" | "system" | "tool";
 
-export interface MessagePart {
-  type: "text" | "imageUrl";
-  text?: string;
-  imageUrl?: { url: string };
-}
+export type TextMessagePart = {
+  type: "text";
+  text: string;
+};
+
+export type ImageMessagePart = {
+  type: "imageUrl";
+  imageUrl: { url: string };
+};
+
+export type MessagePart = TextMessagePart | ImageMessagePart;
 
 export type MessageContent = string | MessagePart[];
 
@@ -424,6 +438,13 @@ interface ToolCallState {
   output?: ContextItem[];
 }
 
+interface Reasoning {
+  active: boolean;
+  text: string;
+  startAt: number;
+  endAt?: number;
+}
+
 export interface ChatHistoryItem {
   message: ChatMessage;
   contextItems: ContextItemWithId[];
@@ -434,6 +455,7 @@ export interface ChatHistoryItem {
   isGatheringContext?: boolean;
   checkpoint?: Checkpoint;
   isBeforeCheckpoint?: boolean;
+  reasoning?: Reasoning;
 }
 
 export interface LLMFullCompletionOptions extends BaseCompletionOptions {
@@ -459,9 +481,18 @@ export interface LLMOptions {
   writeLog?: (str: string) => Promise<void>;
   llmRequestHook?: (model: string, prompt: string) => any;
   apiKey?: string;
-  aiGatewaySlug?: string;
+
+  // continueProperties
+  apiKeyLocation?: string;
   apiBase?: string;
+  orgScopeId?: string | null;
+
+  onPremProxyUrl?: string | null;
+
+  aiGatewaySlug?: string;
   cacheBehavior?: CacheBehavior;
+  capabilities?: ModelCapability;
+  roles?: ModelRole[];
 
   useLegacyCompletionsEndpoint?: boolean;
 
@@ -482,17 +513,16 @@ export interface LLMOptions {
   profile?: string;
   modelArn?: string;
 
-  // AWS and GCP Options
+  // AWS and VertexAI Options
   region?: string;
 
-  // GCP Options
-  capabilities?: ModelCapability;
-
-  // GCP and Watsonx Options
+  // VertexAI and Watsonx Options
   projectId?: string;
 
   // IBM watsonx Options
   deploymentId?: string;
+
+  env?: Record<string, string | number | boolean>;
 
   ide?: IDE | undefined,
 }
@@ -583,8 +613,8 @@ export interface IdeSettings {
   remoteConfigSyncPeriod: number;
   userToken: string;
   enableControlServerBeta: boolean;
+  continueTestEnvironment: "none" | "production" | "staging" | "local";
   pauseCodebaseIndexOnStart: boolean;
-  enableDebugLogs: boolean;
 }
 
 export interface FileStats {
@@ -635,7 +665,7 @@ export interface IDE {
 
   openUrl(url: string): Promise<void>;
 
-  runCommand(command: string): Promise<void>;
+  runCommand(command: string, options?: TerminalOptions): Promise<void>;
 
   saveFile(fileUri: string): Promise<void>;
 
@@ -655,6 +685,10 @@ export interface IDE {
         contents: string;
       }
   >;
+
+  getLastFileSaveTimestamp?(): number;
+
+  updateLastFileSaveTimestamp?(): void;
 
   getPinnedFiles(): Promise<string[]>;
 
@@ -684,6 +718,11 @@ export interface IDE {
 
   getGitHubAuthToken(args: GetGhTokenArgs): Promise<string | undefined>;
 
+  // Secret Storage
+  readSecrets(keys: string[]): Promise<Record<string, string>>;
+
+  writeSecrets(secrets: { [key: string]: string }): Promise<void>;
+
   // LSP
   gotoDefinition(location: Location): Promise<RangeInFile[]>;
 
@@ -709,6 +748,7 @@ export interface ContinueSDK {
   selectedCode: RangeInFile[];
   config: ContinueConfig;
   fetch: FetchFunction;
+  completionOptions?: LLMFullCompletionOptions;
 }
 
 export interface SlashCommand {
@@ -734,7 +774,6 @@ export type StepName =
 
 export type ContextProviderName =
   | "diff"
-  | "github"
   | "terminal"
   | "debugger"
   | "open"
@@ -761,6 +800,10 @@ export type ContextProviderName =
   | "issue"
   | "repo-map"
   | "url"
+  | "commit"
+  | "web"
+  | "discord"
+  | "clipboard"
   | string;
 
 export type TemplateType =
@@ -823,7 +866,7 @@ export interface SlashCommandDescription {
 export interface CustomCommand {
   name: string;
   prompt: string;
-  description: string;
+  description?: string;
 }
 
 export interface Prediction {
@@ -840,6 +883,7 @@ export interface ToolExtras {
   ide: IDE;
   llm: ILLM;
   fetch: FetchFunction;
+  tool: Tool;
 }
 
 export interface Tool {
@@ -855,6 +899,14 @@ export interface Tool {
   wouldLikeTo: string;
   readonly: boolean;
   uri?: string;
+  faviconUrl?: string;
+}
+
+interface ToolChoice {
+  type: "function";
+  function: {
+    name: string;
+  };
 }
 
 export interface BaseCompletionOptions {
@@ -874,10 +926,12 @@ export interface BaseCompletionOptions {
   stream?: boolean;
   prediction?: Prediction;
   tools?: Tool[];
+  toolChoice?: ToolChoice;
 }
 
 export interface ModelCapability {
   uploadImage?: boolean;
+  tools?: boolean;
 }
 
 export interface ModelDescription {
@@ -885,7 +939,14 @@ export interface ModelDescription {
   provider: string;
   model: string;
   apiKey?: string;
+
+  // continueProperties
+  apiKeyLocation?: string;
   apiBase?: string;
+  orgScopeId?: string | null;
+
+  onPremProxyUrl?: string | null;
+
   contextLength?: number;
   maxStopWords?: number;
   template?: TemplateType;
@@ -893,8 +954,9 @@ export interface ModelDescription {
   systemMessage?: string;
   requestOptions?: RequestOptions;
   promptTemplates?: { [key: string]: string };
-  capabilities?: ModelCapability;
   cacheBehavior?: CacheBehavior;
+  capabilities?: ModelCapability;
+  roles?: ModelRole[];
 }
 
 export interface EmbedOptions {
@@ -905,15 +967,16 @@ export interface EmbedOptions {
   apiType?: string;
   apiVersion?: string;
   requestOptions?: RequestOptions;
-  maxChunkSize?: number;
-  maxBatchSize?: number;
+  maxEmbeddingChunkSize?: number;
+  maxEmbeddingBatchSize?: number;
+
   // AWS options
   profile?: string;
 
-  // AWS and GCP Options
+  // AWS and VertexAI Options
   region?: string;
 
-  // GCP and Watsonx Options
+  // VertexAI and Watsonx Options
   projectId?: string;
 }
 
@@ -928,7 +991,6 @@ export interface RerankerDescription {
 
 export interface TabAutocompleteOptions {
   disable: boolean;
-  useFileSuffix: boolean;
   maxPromptTokens: number;
   debounceDelay: number;
   maxSuffixPercentage: number;
@@ -944,12 +1006,18 @@ export interface TabAutocompleteOptions {
   disableInFiles?: string[];
   useImports?: boolean;
   showWhateverWeHaveAtXMs?: number;
+  // true = enabled, false = disabled, number = enabled with priority
+  experimental_includeClipboard: boolean | number;
+  experimental_includeRecentlyVisitedRanges: boolean | number;
+  experimental_includeRecentlyEditedRanges: boolean | number;
+  experimental_includeDiff: boolean | number;
 }
 
 export interface StdioOptions {
   type: "stdio";
   command: string;
   args: string[];
+  env?: Record<string, string>;
 }
 
 export interface WebSocketOptions {
@@ -966,6 +1034,7 @@ export type TransportOptions = StdioOptions | WebSocketOptions | SSEOptions;
 
 export interface MCPOptions {
   transport: TransportOptions;
+  faviconUrl?: string;
 }
 
 export interface ContinueUIConfig {
@@ -973,8 +1042,8 @@ export interface ContinueUIConfig {
   fontSize?: number;
   displayRawMarkdown?: boolean;
   showChatScrollbar?: boolean;
-  getChatTitles?: boolean;
   codeWrap?: boolean;
+  showSessionTabs?: boolean;
 }
 
 export interface ContextMenuConfig {
@@ -985,10 +1054,10 @@ export interface ContextMenuConfig {
   fixGrammar?: string;
 }
 
-export interface ModelRoles {
+export interface ExperimentalModelRoles {
+  repoMapFileSelection?: string;
   inlineEdit?: string;
   applyCodeBlock?: string;
-  repoMapFileSelection?: string;
 }
 
 export type EditStatus =
@@ -1053,7 +1122,7 @@ export type DefaultContextProvider = ContextProviderWithParams & {
 
 export interface ExperimentalConfig {
   contextMenuPrompts?: ContextMenuConfig;
-  modelRoles?: ModelRoles;
+  modelRoles?: ExperimentalModelRoles;
   defaultContext?: DefaultContextProvider[];
   promptPath?: string;
 
@@ -1074,12 +1143,11 @@ export interface ExperimentalConfig {
    * This is needed to crawl a large number of documentation sites that are dynamically rendered.
    */
   useChromiumForDocsCrawling?: boolean;
-  useTools?: boolean;
   modelContextProtocolServers?: MCPOptions[];
 }
 
 export interface AnalyticsConfig {
-  type: string;
+  provider: string;
   url?: string;
   clientKey?: string;
 }
@@ -1106,6 +1174,7 @@ export interface SerializedContinueConfig {
   experimental?: ExperimentalConfig;
   analytics?: AnalyticsConfig;
   docs?: SiteIndexingConfig[];
+  data?: DataDestination[];
 }
 
 export type ConfigMergeType = "merge" | "overwrite";
@@ -1158,6 +1227,7 @@ export interface Config {
   experimental?: ExperimentalConfig;
   /** Analytics configuration */
   analytics?: AnalyticsConfig;
+  data?: DataDestination[];
 }
 
 // in the actual Continue source code
@@ -1172,15 +1242,15 @@ export interface ContinueConfig {
   disableSessionTitles?: boolean;
   disableIndexing?: boolean;
   userToken?: string;
-  embeddingsProvider: ILLM;
-  tabAutocompleteModels?: ILLM[];
   tabAutocompleteOptions?: Partial<TabAutocompleteOptions>;
   ui?: ContinueUIConfig;
-  reranker?: ILLM;
   experimental?: ExperimentalConfig;
   analytics?: AnalyticsConfig;
   docs?: SiteIndexingConfig[];
   tools: Tool[];
+  modelsByRole: Record<ModelRole, ILLM[]>;
+  selectedModelByRole: Record<ModelRole, ILLM | null>;
+  data?: DataDestination[];
 }
 
 export interface BrowserSerializedContinueConfig {
@@ -1194,13 +1264,15 @@ export interface BrowserSerializedContinueConfig {
   disableIndexing?: boolean;
   disableSessionTitles?: boolean;
   userToken?: string;
-  embeddingsProvider?: string;
   ui?: ContinueUIConfig;
-  reranker?: RerankerDescription;
   experimental?: ExperimentalConfig;
   analytics?: AnalyticsConfig;
   docs?: SiteIndexingConfig[];
   tools: Tool[];
+  usePlatform: boolean;
+  tabAutocompleteOptions?: Partial<TabAutocompleteOptions>;
+  modelsByRole: Record<ModelRole, ModelDescription[]>;
+  selectedModelByRole: Record<ModelRole, ModelDescription | null>;
 }
 
 // DOCS SUGGESTIONS AND PACKAGE INFO
@@ -1239,3 +1311,8 @@ export type PackageDocsResult = {
   | { error: string; details?: never }
   | { details: PackageDetailsSuccess; error?: never }
 );
+
+export interface TerminalOptions {
+  reuseTerminal?: boolean;
+  terminalName?: string;
+}

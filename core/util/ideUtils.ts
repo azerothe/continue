@@ -1,6 +1,10 @@
 import { IDE } from "..";
 
-import { joinPathsToUri, pathToUriPathSegment } from "./uri";
+import {
+  joinEncodedUriPathSegmentToUri,
+  joinPathsToUri,
+  pathToUriPathSegment,
+} from "./uri";
 
 /*
   This function takes a relative (to workspace) filepath
@@ -30,28 +34,29 @@ export async function resolveRelativePathInDir(
   If no meaninful path match just concatenates to first dir's uri
 */
 export async function inferResolvedUriFromRelativePath(
-  path: string,
+  _relativePath: string,
   ide: IDE,
   dirCandidates?: string[],
 ): Promise<string> {
+  const relativePath = _relativePath.trim().replaceAll("\\", "/");
   const dirs = dirCandidates ?? (await ide.getWorkspaceDirs());
 
   if (dirs.length === 0) {
     throw new Error("inferResolvedUriFromRelativePath: no dirs provided");
   }
 
-  const segments = pathToUriPathSegment(path).split("/");
+  const segments = pathToUriPathSegment(relativePath).split("/");
   // Generate all possible suffixes from shortest to longest
   const suffixes: string[] = [];
   for (let i = segments.length - 1; i >= 0; i--) {
     suffixes.push(segments.slice(i).join("/"));
   }
 
-  // For each suffix, try to find a unique matching directory
+  // For each suffix, try to find a unique matching dir/file
   for (const suffix of suffixes) {
     const uris = dirs.map((dir) => ({
       dir,
-      partialUri: joinPathsToUri(dir, suffix),
+      partialUri: joinEncodedUriPathSegmentToUri(dir, suffix),
     }));
     const promises = uris.map(async ({ partialUri, dir }) => {
       const exists = await ide.fileExists(partialUri);
@@ -67,15 +72,20 @@ export async function inferResolvedUriFromRelativePath(
 
     // If exactly one directory matches, use it
     if (existingUris.length === 1) {
-      return joinPathsToUri(existingUris[0].dir, segments.join("/"));
+      return joinEncodedUriPathSegmentToUri(
+        existingUris[0].dir,
+        segments.join("/"),
+      );
     }
   }
 
-  // If no unique match found, use the first directory
-  return joinPathsToUri(dirs[0], path);
-}
+  // Sometimes the model will decide to only output the base name or small number of path parts
+  // in which case we shouldn't create a new file if it matches the current file
+  const activeFile = await ide.getCurrentFile();
+  if (activeFile && activeFile.path.endsWith(relativePath)) {
+    return activeFile.path;
+  }
 
-interface ResolveResult {
-  resolvedUri: string;
-  matchedDir: string;
+  // If no unique match found, use the first directory
+  return joinPathsToUri(dirs[0], relativePath);
 }

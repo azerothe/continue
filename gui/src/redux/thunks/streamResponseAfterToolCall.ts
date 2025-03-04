@@ -30,6 +30,10 @@ export const streamResponseAfterToolCall = createAsyncThunk<
         const initialHistory = state.session.history;
         const defaultModel = selectDefaultModel(state);
 
+        if (!defaultModel) {
+          throw new Error("No model selected");
+        }
+
         resetStateForNewMessage();
 
         await new Promise((resolve) => setTimeout(resolve, 0));
@@ -39,7 +43,6 @@ export const streamResponseAfterToolCall = createAsyncThunk<
           content: renderContextItems(toolOutput),
           toolCallId,
         };
-
         dispatch(streamUpdate([newMessage]));
         dispatch(
           addContextItemsAtIndex({
@@ -59,11 +62,11 @@ export const streamResponseAfterToolCall = createAsyncThunk<
         const updatedHistory = getState().session.history;
         const messages = constructMessages(
           [...updatedHistory],
-          defaultModel.model,
-          defaultModel.provider,
+          defaultModel,
           useTools,
         );
-        unwrapResult(await dispatch(streamNormalInput(messages)));
+        const output = await dispatch(streamNormalInput(messages));
+        unwrapResult(output);
       }),
     );
   },

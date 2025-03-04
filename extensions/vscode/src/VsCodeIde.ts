@@ -25,17 +25,53 @@ import type {
   Location,
   Problem,
   RangeInFile,
+  TerminalOptions,
   Thread,
 } from "core";
+import { SecretStorage } from "./stubs/SecretStorage";
 
 class VsCodeIde implements IDE {
   ideUtils: VsCodeIdeUtils;
+  secretStorage: SecretStorage;
+  private lastFileSaveTimestamp: number = Date.now();
 
   constructor(
     private readonly vscodeWebviewProtocolPromise: Promise<VsCodeWebviewProtocol>,
     private readonly context: vscode.ExtensionContext,
   ) {
     this.ideUtils = new VsCodeIdeUtils();
+    this.secretStorage = new SecretStorage(context);
+  }
+
+  public updateLastFileSaveTimestamp(): void {
+    this.lastFileSaveTimestamp = Date.now();
+  }
+
+  public getLastFileSaveTimestamp(): number {
+    return this.lastFileSaveTimestamp;
+  }
+
+  async readSecrets(keys: string[]): Promise<Record<string, string>> {
+    const secretValuePromises = keys.map((key) => this.secretStorage.get(key));
+    const secretValues = await Promise.all(secretValuePromises);
+
+    return keys.reduce(
+      (acc, key, index) => {
+        if (secretValues[index] === undefined) {
+          return acc;
+        }
+
+        acc[key] = secretValues[index];
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
+  }
+
+  async writeSecrets(secrets: { [key: string]: string }): Promise<void> {
+    for (const [key, value] of Object.entries(secrets)) {
+      await this.secretStorage.store(key, value);
+    }
   }
 
   async fileExists(uri: string): Promise<boolean> {
@@ -398,17 +434,26 @@ class VsCodeIde implements IDE {
     );
   }
 
-  async runCommand(command: string): Promise<void> {
-    if (vscode.window.terminals.length) {
-      const terminal =
-        vscode.window.activeTerminal ?? vscode.window.terminals[0];
-      terminal.show();
-      terminal.sendText(command, false);
-    } else {
-      const terminal = vscode.window.createTerminal();
-      terminal.show();
-      terminal.sendText(command, false);
+  async runCommand(
+    command: string,
+    options: TerminalOptions = { reuseTerminal: true },
+  ): Promise<void> {
+    let terminal: vscode.Terminal | undefined;
+    if (vscode.window.terminals.length && options.reuseTerminal) {
+      if (options.terminalName) {
+        terminal = vscode.window.terminals.find(
+          (t) => t?.name === options.terminalName,
+        );
+      } else {
+        terminal = vscode.window.activeTerminal ?? vscode.window.terminals[0];
+      }
     }
+
+    if (!terminal) {
+      terminal = vscode.window.createTerminal(options?.terminalName);
+    }
+    terminal.show();
+    terminal.sendText(command, false);
   }
 
   async saveFile(fileUri: string): Promise<void> {
@@ -583,7 +628,7 @@ class VsCodeIde implements IDE {
     return vscode.workspace.fs.readDirectory(vscode.Uri.parse(dir)) as any;
   }
 
-  getIdeSettingsSync(): IdeSettings {
+  private getIdeSettingsSync(): IdeSettings {
     const settings = vscode.workspace.getConfiguration(EXTENSION_NAME);
     const remoteConfigServerUrl = settings.get<string | undefined>(
       "remoteConfigServerUrl",
@@ -600,11 +645,11 @@ class VsCodeIde implements IDE {
         "enableContinueForTeams",
         false,
       ),
+      continueTestEnvironment: "production",
       pauseCodebaseIndexOnStart: settings.get<boolean>(
         "pauseCodebaseIndexOnStart",
         false,
       ),
-      enableDebugLogs: false,
       // settings.get<boolean>(
       //   "enableControlServerBeta",
       //   false,
@@ -614,7 +659,8 @@ class VsCodeIde implements IDE {
   }
 
   async getIdeSettings(): Promise<IdeSettings> {
-    return this.getIdeSettingsSync();
+    const ideSettings = this.getIdeSettingsSync();
+    return ideSettings;
   }
 }
 

@@ -29,6 +29,7 @@ import { showTutorial } from "../util/tutorial";
 import { getExtensionUri } from "../util/vscode";
 import { VsCodeIde } from "../VsCodeIde";
 import { VsCodeWebviewProtocol } from "../webviewProtocol";
+import { ILLM } from "core";
 
 /**
  * A shared messenger class between Core and Webview
@@ -100,7 +101,6 @@ export class VsCodeMessenger {
     });
 
     this.onWebview("toggleDevTools", (msg) => {
-      vscode.commands.executeCommand("workbench.action.toggleDevTools");
       vscode.commands.executeCommand("continue.viewLogs");
     });
     this.onWebview("reloadWindow", (msg) => {
@@ -179,7 +179,7 @@ export class VsCodeMessenger {
         return;
       }
 
-      let llm = getModelByRole(config, "applyCodeBlock");
+      let llm: ILLM | null | undefined = config.selectedModelByRole.apply;
 
       if (!llm) {
         llm = config.models.find(
@@ -232,6 +232,7 @@ export class VsCodeMessenger {
           undefined,
           undefined,
           rangeToApplyTo,
+          data.text,
         );
       }
     });
@@ -287,13 +288,10 @@ export class VsCodeMessenger {
       const prompt = msg.data.prompt;
       const { start, end } = msg.data.range.range;
       const verticalDiffManager = await verticalDiffManagerPromise;
-      const modelTitle = await this.webviewProtocol.request(
-        "getDefaultModelTitle",
-        undefined,
-      );
+
       const fileAfterEdit = await verticalDiffManager.streamEdit(
         stripImages(prompt),
-        modelTitle,
+        msg.data.selectedModelTitle,
         "edit",
         undefined,
         undefined,
@@ -307,30 +305,6 @@ export class VsCodeMessenger {
         status: "accepting",
         fileAfterEdit,
       });
-    });
-    this.onWebview("edit/acceptReject", async (msg) => {
-      const { onlyFirst, accept, filepath } = msg.data;
-      if (accept && onlyFirst) {
-        // Accept first
-        vscode.commands.executeCommand(
-          "continue.acceptVerticalDiffBlock",
-          filepath,
-          0,
-        );
-      } else if (accept) {
-        vscode.commands.executeCommand("continue.acceptDiff", filepath);
-        // Accept all
-      } else if (onlyFirst) {
-        // Reject first
-        vscode.commands.executeCommand(
-          "continue.rejectVerticalDiffBlock",
-          filepath,
-          0,
-        );
-      } else {
-        // Reject all
-        vscode.commands.executeCommand("continue.rejectDiff", filepath);
-      }
     });
     this.onWebview("edit/exit", async (msg) => {
       if (msg.data.shouldFocusEditor) {
@@ -448,7 +422,10 @@ export class VsCodeMessenger {
       ide.getGitHubAuthToken(msg.data),
     );
     this.onWebviewOrCore("getControlPlaneSessionInfo", async (msg) => {
-      return getControlPlaneSessionInfo(msg.data.silent);
+      return getControlPlaneSessionInfo(
+        msg.data.silent,
+        msg.data.useOnboarding,
+      );
     });
     this.onWebviewOrCore("setControlPlaneSessionInfo", async (msg) => {
       return setControlPlaneSessionInfo(msg.data.accessToken, msg.data.account);

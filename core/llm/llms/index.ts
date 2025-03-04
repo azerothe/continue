@@ -20,6 +20,7 @@ import Cohere from "./Cohere";
 import DeepInfra from "./DeepInfra";
 import Deepseek from "./Deepseek";
 import Fireworks from "./Fireworks";
+import NCompass from "./NCompass";
 import Flowise from "./Flowise";
 import FreeTrial from "./FreeTrial";
 import FunctionNetwork from "./FunctionNetwork";
@@ -49,6 +50,7 @@ import ContinueProxy from "./stubs/ContinueProxy";
 import TestLLM from "./Test";
 import TextGenWebUI from "./TextGenWebUI";
 import Together from "./Together";
+import Novita from "./Novita";
 import VertexAI from "./VertexAI";
 import Vllm from "./Vllm";
 import WatsonX from "./WatsonX";
@@ -66,6 +68,7 @@ export const LLMClasses = [
   Replicate,
   TextGenWebUI,
   Together,
+  Novita,
   HuggingFaceTGI,
   HuggingFaceInferenceAPI,
   Kindo,
@@ -80,6 +83,7 @@ export const LLMClasses = [
   Flowise,
   Groq,
   Fireworks,
+  NCompass,
   ContinueProxy,
   Cloudflare,
   Deepseek,
