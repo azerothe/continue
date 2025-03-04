@@ -12,6 +12,7 @@ import com.github.continuedev.continueintellijextension.protocol.*
 import com.github.continuedev.continueintellijextension.services.*
 import com.github.continuedev.continueintellijextension.utils.*
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.ServiceManager
@@ -87,17 +88,26 @@ class IdeProtocolClient(
                     }
 
                     "getControlPlaneSessionInfo" -> {
-                        val params = Gson().fromJson(
-                            dataElement.toString(),
-                            GetControlPlaneSessionInfoParams::class.java
-                        )
-                        val authService = service<ContinueAuthService>()
-
-                        if (params.silent) {
-                            val sessionInfo = authService.loadControlPlaneSessionInfo()
-                            respond(sessionInfo)
-                        } else {
-                            authService.startAuthFlow(project)
+//                        val params = Gson().fromJson(
+//                            dataElement.toString(),
+//                            GetControlPlaneSessionInfoParams::class.java
+//                        )
+//                        val authService = service<ContinueAuthService>()
+//
+//                        if (params.silent) {
+//                            val sessionInfo = authService.loadControlPlaneSessionInfo()
+//                            respond(sessionInfo)
+//                        } else {
+//                            authService.startAuthFlow(project)
+//                            respond(null)
+//                        }
+                        //改为从idea插件设置中取出
+                        val settings = service<ContinueExtensionSettings>()
+                        try {
+                            val userToken: JsonObject =
+                                Gson().fromJson(settings.continueState.userToken, JsonObject::class.java)
+                            respond(if (userToken.get("accessToken").isJsonNull) null else userToken)
+                        } catch (e: Exception) {
                             respond(null)
                         }
 
@@ -107,7 +117,7 @@ class IdeProtocolClient(
                         //直接保存到idea插件设置中
                         val settings = service<ContinueExtensionSettings>()
                         try {
-                            val userToken = Gson().toJson(data)
+                            val userToken = Gson().toJson(dataElement)
                             settings.continueState.userToken = userToken
                             ApplicationManager.getApplication().messageBus.syncPublisher(SettingsListener.TOPIC)
                                 .settingsUpdated(settings.continueState)
