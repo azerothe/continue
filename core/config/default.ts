@@ -5,14 +5,32 @@ import {
   SlashCommandDescription,
 } from "../";
 
-export const DEFAULT_CHAT_MODEL_CONFIG: ModelDescription = {
-  title: "DeepSeek Coder",
-  model: "deepseek-coder",
-  contextLength: 128000,
-  provider: "deepseek",
-  apiBase: "http://api.lingxi.eastcom-sw.com/openai",
-  apiKey: "sk-d810c9d813834c6dad30dc759f375716"
-};
+export const DEFAULT_CHAT_MODEL_CONFIG: ModelDescription[] = [
+  {
+    title: "DeepSeek-V3",
+    model: "ep-20250228145110-lgwbr",
+    contextLength: 128000,
+    provider: "deepseek",
+    apiBase: "https://ark.cn-beijing.volces.com/api/v3",
+    apiKey: "9a91349c-283a-451e-89f6-10eef1b8669d",
+  },
+  {
+    title: "DeepSeek-R1",
+    model: "ep-20250228154929-754g5",
+    contextLength: 128000,
+    provider: "deepseek",
+    apiBase: "https://ark.cn-beijing.volces.com/api/v3",
+    apiKey: "9a91349c-283a-451e-89f6-10eef1b8669d",
+  },
+  // {
+  //   title: "DeepSeek-V2",
+  //   model: "deepseek-coder",
+  //   contextLength: 128000,
+  //   provider: "deepseek",
+  //   apiBase: "http://api.lingxi.eastcom-sw.com/openai",
+  //   apiKey: "sk-d810c9d813834c6dad30dc759f375716",
+  // },
+];
 
 export const DEFAULT_AUTOCOMPLETE_MODEL_CONFIG: ModelDescription = {
   title: "DeepSeek-V2",
@@ -25,9 +43,9 @@ export const DEFAULT_AUTOCOMPLETE_MODEL_CONFIG: ModelDescription = {
     temperature: 0,
     topP: 1,
     presencePenalty: 0,
-    frequencyPenalty: 0
+    frequencyPenalty: 0,
   },
-  provider: "openai"
+  provider: "openai",
 };
 
 export const FREE_TRIAL_MODELS: ModelDescription[] = [
@@ -104,21 +122,21 @@ export const defaultSlashCommandsJetBrains = [
 ];
 
 export const defaultConfig: SerializedContinueConfig = {
-  models: [DEFAULT_CHAT_MODEL_CONFIG],
+  models: DEFAULT_CHAT_MODEL_CONFIG,
   tabAutocompleteOptions: {
-    maxPromptTokens: 4096
+    maxPromptTokens: 4096,
   },
-  tabAutocompleteModel: DEFAULT_AUTOCOMPLETE_MODEL_CONFIG,
+  // tabAutocompleteModel: DEFAULT_AUTOCOMPLETE_MODEL_CONFIG,
   contextProviders: defaultContextProvidersVsCode,
   slashCommands: defaultSlashCommandsVscode,
 };
 
 export const defaultConfigJetBrains: SerializedContinueConfig = {
-  models: [DEFAULT_CHAT_MODEL_CONFIG],
+  models: DEFAULT_CHAT_MODEL_CONFIG,
   tabAutocompleteOptions: {
-    maxPromptTokens: 4096
+    maxPromptTokens: 4096,
   },
-  tabAutocompleteModel: DEFAULT_AUTOCOMPLETE_MODEL_CONFIG,
+  // tabAutocompleteModel: DEFAULT_AUTOCOMPLETE_MODEL_CONFIG,
   contextProviders: defaultContextProvidersJetBrains,
   slashCommands: defaultSlashCommandsJetBrains,
 };

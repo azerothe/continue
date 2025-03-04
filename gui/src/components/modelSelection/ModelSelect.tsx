@@ -168,7 +168,9 @@ function ModelOption({
     e.stopPropagation();
     e.preventDefault();
 
-    // ideMessenger.post("config/openLocalConfigFile", undefined);
+    ideMessenger.post("config/openProfile", {
+      profileId: "local",
+    })
   }
 
   function handleOptionClick(e) {

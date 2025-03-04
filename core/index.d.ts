@@ -336,17 +336,20 @@ export interface ToolResultChatMessage {
 
 export interface UserChatMessage {
   role: "user";
+  reasoning?: Boolean;
   content: MessageContent;
 }
 
 export interface AssistantChatMessage {
   role: "assistant";
   content: MessageContent;
+  reasoning?: Boolean;
   toolCalls?: ToolCallDelta[];
 }
 
 export interface SystemChatMessage {
   role: "system";
+  reasoning?: Boolean;
   content: string;
 }
 

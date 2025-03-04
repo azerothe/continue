@@ -433,7 +433,11 @@ async function downloadRipgrepBinary(target) {
     execCmdSync(
       `curl -L -o node_modules/@vscode/ripgrep/bin/build.zip ${downloadUrl}`,
     );
-    execCmdSync("cd node_modules/@vscode/ripgrep/bin && unzip build.zip");
+    execCmdSync("cd node_modules/@vscode/ripgrep/bin ");
+    // execCmdSync("Expand-Archive build.zip");
+    execCmdSync(
+      'powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path node_modules/@vscode/ripgrep/bin/build.zip -DestinationPath node_modules/@vscode/ripgrep/bin"'
+    );
     fs.unlinkSync("node_modules/@vscode/ripgrep/bin/build.zip");
   } else {
     execCmdSync(

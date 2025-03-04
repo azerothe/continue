@@ -139,7 +139,8 @@ export function fromChatResponse(response: ChatCompletion): ChatMessage {
 }
 
 export function fromChatCompletionChunk(
-  chunk: ChatCompletionChunk,
+  chunk: any,
+  // chunk: ChatCompletionChunk,
 ): ChatMessage | undefined {
   const delta = chunk.choices?.[0]?.delta;
 
@@ -147,6 +148,12 @@ export function fromChatCompletionChunk(
     return {
       role: "assistant",
       content: delta.content,
+    };
+  } else if (delta?.reasoning_content ) {
+    return {
+      role: "assistant",
+      content: delta.reasoning_content,
+      reasoning: true,
     };
   } else if (delta?.tool_calls) {
     return {
