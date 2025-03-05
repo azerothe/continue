@@ -1,10 +1,10 @@
-
 import { useContext, useEffect, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { useDispatch } from "react-redux";
 import { Button, Input } from "../components";
 import { IdeMessengerContext } from "../context/IdeMessenger";
 import { useAuth } from "../hooks/useAuth";
+// @ts-ignore
 import Base64 from "../util/base64";
 
 interface QuickModelSetupProps {
@@ -21,17 +21,16 @@ function LoginForm({
   onDone,
   hideFreeTrialLimitMessage,
 }: QuickModelSetupProps) {
-
   const formMethods = useForm();
   const dispatch = useDispatch();
   const ideMessenger = useContext(IdeMessengerContext);
   const username = formMethods.watch("username");
   const password = formMethods.watch("password");
-  const [errorMsg, setErrorMsg] = useState('')
+  const [errorMsg, setErrorMsg] = useState("");
+
   function isDisabled() {
     return !username || !password;
   }
-
 
   async function onSubmit() {
     // let response = await fetch(`http://10.8.132.139:8086/prod-api/captchaImage`, {
@@ -40,18 +39,21 @@ function LoginForm({
     // });
     // base64 密码加密
     const pwd = Base64.encode(password);
-    let response = await fetch(`http://api.lingxi.eastcom-sw.com/lingxi/apiKey/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    let response = await fetch(
+      `http://api.lingxi.eastcom-sw.com/lingxi/apiKey/login`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password: pwd }),
       },
-      body: JSON.stringify({ username, password: pwd }),
-    });
+    );
     if (!response.ok) {
-      setErrorMsg(JSON.stringify(response))
+      setErrorMsg(JSON.stringify(response));
     } else {
       const res = await response.json();
-      if(res?.code == 200) {
+      if (res?.code == 200) {
         ideMessenger.post("setControlPlaneSessionInfo", {
           accessToken: res.data?.accessToken || username,
           account: {
@@ -59,10 +61,10 @@ function LoginForm({
             label: username,
           },
         });
-        ideMessenger.post("config/reload", undefined)
+        ideMessenger.post("config/reload", undefined);
         onDone();
       } else {
-        setErrorMsg(res?.msg)
+        setErrorMsg(res?.msg);
       }
     }
 
@@ -70,7 +72,6 @@ function LoginForm({
     // ideMessenger.post("openConfigJson", undefined);
 
     // dispatch(setDefaultModel({ title: model.title, force: true }));
-
   }
 
   return (
@@ -80,12 +81,9 @@ function LoginForm({
           <h1 className="mb-0 text-center text-2xl">登录</h1>
 
           <div className="my-8 flex flex-col gap-6">
-
             <div>
               <>
-                <label className="mb-1 block text-sm font-medium">
-                  用户名
-                </label>
+                <label className="mb-1 block text-sm font-medium">用户名</label>
                 <Input
                   id="username"
                   className="w-full"
@@ -117,13 +115,10 @@ function LoginForm({
                 />
               </>
             </div>
-
           </div>
-          {errorMsg && <div className=" w-full text-red-500"> {errorMsg}</div>}
+          {errorMsg && <div className="w-full text-red-500"> {errorMsg}</div>}
           <div className="mt-4 w-full">
-            <Button type="submit" className="w-full"
-              disabled={isDisabled()}
-            >
+            <Button type="submit" className="w-full" disabled={isDisabled()}>
               登录
             </Button>
             {/* <AddModelButtonSubtext /> */}

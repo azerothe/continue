@@ -251,9 +251,15 @@ async function installNodeModuleInTempDirAndCopyToCurrent(packageName, toCopy) {
 
     const downloadUrl =
       // node-sqlite3 doesn't have a pre-built binary for win32-arm64
+      // target === "win32-arm64"
+      //   ? "https://continue-server-binaries.s3.us-west-1.amazonaws.com/win32-arm64/node_sqlite3.tar.gz"
+      //   : `https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-${
+      //       target
+      //     }.tar.gz`;
+      //公司私服库
       target === "win32-arm64"
-        ? "https://continue-server-binaries.s3.us-west-1.amazonaws.com/win32-arm64/node_sqlite3.tar.gz"
-        : `https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-${
+        ? "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/node_sqlite3.tar.gz"
+        : `http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/sqlite3-v5.1.7-napi-v6-${
             target
           }.tar.gz`;
 

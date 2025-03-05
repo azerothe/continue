@@ -26,10 +26,7 @@ import { RootState } from "../redux/store";
 import { getFontSize } from "../util";
 import HeaderButtonWithToolTip from "./gui/HeaderButtonWithToolTip";
 import LoginForm from "../forms/LoginForm";
-import {
-  setDialogMessage,
-  setShowDialog,
-} from "../redux/slices/uiSlice";
+import { setDialogMessage, setShowDialog } from "../redux/slices/uiSlice";
 import { useNavigate } from "react-router-dom";
 import { useAppSelector } from "../redux/hooks";
 
@@ -142,7 +139,7 @@ function ProfileSwitcher() {
   );
 
   const selectedProfileId = useAppSelector(
-    (store) => store.session.selectedProfileId,
+    (store) => store.session.selectedProfile?.id,
   );
 
   const [controlServerBetaEnabled, setControlServerBetaEnabled] =
@@ -173,13 +170,13 @@ function ProfileSwitcher() {
     [],
   );
 
-  useEffect(() => {
-    ideMessenger
-      .request("config/listProfiles", undefined)
-      .then(
-        (result) => result.status === "success" && setProfiles(result.content),
-      );
-  }, []);
+  // useEffect(() => {
+  //   ideMessenger
+  //     .request("config/listProfiles", undefined)
+  //     .then(
+  //       (result) => result.status === "success" && setProfiles(result.content),
+  //     );
+  // }, []);
 
   useWebviewListener(
     "didChangeAvailableProfiles",
@@ -189,7 +186,9 @@ function ProfileSwitcher() {
     [],
   );
 
-  const topDiv = document.getElementById("profile-select-top-div");
+  const topDiv = document.getElementById(
+    "profile-select-top-div",
+  ) as HTMLElement;
 
   function selectedProfile() {
     return profiles.find((p) => p.id === selectedProfileId);
@@ -212,7 +211,7 @@ function ProfileSwitcher() {
   return (
     <>
       {/* {controlServerBetaEnabled && session?.account?.id && ( */}
-      { false && (
+      {false && (
         <StyledListbox
           value={"GPT-4"}
           onChange={(id: string) => {

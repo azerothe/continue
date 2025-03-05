@@ -355,12 +355,18 @@ const isMacTarget = target?.startsWith("darwin");
     rimrafSync("../../core/node_modules/sqlite3/build");
     const downloadUrl = {
       "darwin-arm64":
-        "https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-darwin-arm64.tar.gz",
+      //"https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-darwin-arm64.tar.gz",
+      //公司私服库
+        "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/sqlite3-v5.1.7-napi-v6-darwin-arm64.tar.gz",
       "linux-arm64":
-        "https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v3-linux-arm64.tar.gz",
+      //"https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v3-linux-arm64.tar.gz",
+      //公司私服库
+        "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/sqlite3-v5.1.7-napi-v3-linux-arm64.tar.gz",
       // node-sqlite3 doesn't have a pre-built binary for win32-arm64
       "win32-arm64":
-        "https://continue-server-binaries.s3.us-west-1.amazonaws.com/win32-arm64/node_sqlite3.tar.gz",
+      //"https://continue-server-binaries.s3.us-west-1.amazonaws.com/win32-arm64/node_sqlite3.tar.gz",
+      //公司私服库
+        "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/node_sqlite3.tar.gz",
     }[target];
     execCmdSync(
       `curl -L -o ../../core/node_modules/sqlite3/build.tar.gz ${downloadUrl}`,
@@ -440,7 +446,7 @@ const isMacTarget = target?.startsWith("darwin");
             `node_modules/${mod}`,
             `out/node_modules/${mod}`,
             { dereference: true },
-            function (error) {
+            function(error) {
               if (error) {
                 console.error(`[error] Error copying ${mod}`, error);
                 reject(error);

@@ -274,7 +274,7 @@ async function copyNodeModules() {
             `node_modules/${mod}`,
             `out/node_modules/${mod}`,
             { dereference: true },
-            function (error) {
+            function(error) {
               if (error) {
                 console.error(`[error] Error copying ${mod}`, error);
                 reject(error);
@@ -366,17 +366,29 @@ async function downloadSqliteBinary(target) {
   rimrafSync("../../core/node_modules/sqlite3/build");
   const downloadUrl = {
     "darwin-arm64":
-      "https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-darwin-arm64.tar.gz",
+    //"https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-darwin-arm64.tar.gz",
+    //公司私服库
+      "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/sqlite3-v5.1.7-napi-v6-darwin-arm64.tar.gz",
     "linux-arm64":
-      "https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v3-linux-arm64.tar.gz",
+    //"https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v3-linux-arm64.tar.gz",
+    //公司私服库
+      "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/sqlite3-v5.1.7-napi-v3-linux-arm64.tar.gz",
     "win32-arm64":
-      "https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-win32-arm64.tar.gz",
+    //"https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-win32-arm64.tar.gz",
+    //公司私服库
+      "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/node_sqlite3.tar.gz",
     "linux-x64":
-      "https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v3-linux-x64.tar.gz",
+    //"https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v3-linux-x64.tar.gz",
+    //公司私服库
+      "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/sqlite3-v5.1.7-napi-v3-linux-x64.tar.gz",
     "darwin-x64":
-      "https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-darwin-x64.tar.gz",
+    //"https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v6-darwin-x64.tar.gz",
+    //公司私服库
+      "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/sqlite3-v5.1.7-napi-v6-darwin-x64.tar.gz",
     "win32-x64":
-      "https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v3-win32-x64.tar.gz",
+    //"https://github.com/TryGhost/node-sqlite3/releases/download/v5.1.7/sqlite3-v5.1.7-napi-v3-win32-x64.tar.gz",
+    //公司私服库
+      "http://nexus.eastcom-sw.com/repository/epaas-raw/lingxi/build/node-sqlite3/sqlite3-v5.1.7-napi-v3-win32-x64.tar.gz",
   }[target];
   execCmdSync(
     `curl -L -o ../../core/node_modules/sqlite3/build.tar.gz ${downloadUrl}`,
@@ -432,7 +444,7 @@ async function downloadRipgrepBinary(target) {
     execCmdSync("cd node_modules/@vscode/ripgrep/bin ");
     // execCmdSync("Expand-Archive build.zip");
     execCmdSync(
-      'powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path node_modules/@vscode/ripgrep/bin/build.zip -DestinationPath node_modules/@vscode/ripgrep/bin"'
+      "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Expand-Archive -Path node_modules/@vscode/ripgrep/bin/build.zip -DestinationPath node_modules/@vscode/ripgrep/bin\"",
     );
     fs.unlinkSync("node_modules/@vscode/ripgrep/bin/build.zip");
   } else {
